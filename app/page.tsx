@@ -543,13 +543,17 @@ export default function GetPaid() {
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 14, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Crew Summary</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
               {cSummary.map((c) => (
-                <div key={c.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div key={c.id} onClick={() => { setTab("contractors"); setSelectedContractor(contractors.find(x => x.id === c.id) || null); }}
+                  style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", cursor: "pointer", transition: "border-color 0.15s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.accent + "66")}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}>
                   <div style={{ width: 34, height: 34, borderRadius: 10, background: c.color + "22", border: `1px solid ${c.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color, fontWeight: 800, fontSize: 13 }}>{initials(c.name)}</div>
                   <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{$$(c.rate)}/hr &middot; {hrs(c.hours)}</div></div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {c.owed > 0 && <Pill color={C.red} glow={C.redGlow}>Owes {$$(c.owed)}</Pill>}
                     {c.paid > 0 && <Pill color={C.green} glow={C.greenGlow}>Paid {$$(c.paid)}</Pill>}
                     {c.count === 0 && <Pill color={C.muted} glow="transparent">No logs</Pill>}
+                    <span style={{ color: C.accentLight, fontSize: 16 }}>›</span>
                   </div>
                 </div>
               ))}
