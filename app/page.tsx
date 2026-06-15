@@ -218,10 +218,11 @@ function DeleteModal({ title, message, onConfirm, onClose }: { title: string; me
 }
 
 // ─── Property Detail ──────────────────────────────────────────────────────────
-function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onDeleteLog, onUpdateLog }: {
+function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onBatchPay }: {
   property: Property; logs: Log[]; contractors: Contractor[];
   onBack: () => void; onTogglePaid: (id: string) => void;
   onDeleteLog: (id: string) => void; onUpdateLog: (id: string, fields: Partial<Log>) => void;
+  onBatchPay: (updates: { id: string; deductions: Deduction[] }[], date: string) => void;
 }) {
   const pLogs = logs.filter((l) => l.property_id === property.id);
   const totalOwed = pLogs.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? netAmt(l, c.rate) : 0); }, 0);
@@ -256,11 +257,17 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
   const doPayAll = async () => {
     if (!payAllTarget) return;
     const finalDeds = payAllDeds.map(d => ({ title: d.title, amount: parseFloat(d.amount) || 0 }));
-    for (const log of payAllTarget.owedLogs) {
+    // Fire all Supabase updates in parallel
+    await Promise.all(payAllTarget.owedLogs.map(log => {
       const merged = [...(log.deductions || []), ...finalDeds];
-      await supabase.from("logs").update({ paid: true, date: payAllDate, deductions: JSON.stringify(merged) }).eq("id", log.id);
-      onUpdateLog(log.id, { paid: true, date: payAllDate, deductions: merged });
-    }
+      return supabase.from("logs").update({ paid: true, date: payAllDate, deductions: JSON.stringify(merged) }).eq("id", log.id);
+    }));
+    // Update React state in one batch
+    const updates = payAllTarget.owedLogs.map(log => ({
+      id: log.id,
+      deductions: [...(log.deductions || []), ...finalDeds],
+    }));
+    onBatchPay(updates, payAllDate);
     setPayAllTarget(null);
   };
 
@@ -672,7 +679,14 @@ export default function GetPaid() {
 
   const updateLog = async (id: string, fields: Partial<Log>) => {
     await supabase.from("logs").update(fields).eq("id", id);
-    setLogs(logs.map((l) => l.id === id ? { ...l, ...fields } : l));
+    setLogs(prev => prev.map((l) => l.id === id ? { ...l, ...fields } : l));
+  };
+
+  const batchPay = (updates: { id: string; deductions: Deduction[] }[], date: string) => {
+    const map = Object.fromEntries(updates.map(u => [u.id, u.deductions]));
+    setLogs(prev => prev.map(l =>
+      map[l.id] !== undefined ? { ...l, paid: true, date, deductions: map[l.id] } : l
+    ));
   };
 
   const updateContractor = async (id: string, field: string, value: string | number) => {
@@ -892,7 +906,7 @@ export default function GetPaid() {
         {/* PROPERTIES */}
         {tab === "properties" && (
           selectedProperty ? (
-            <PropertyDetail property={selectedProperty} logs={logs} contractors={contractors} onBack={() => setSelectedProperty(null)} onTogglePaid={togglePaid} onDeleteLog={deleteLog} onUpdateLog={updateLog} />
+            <PropertyDetail property={selectedProperty} logs={logs} contractors={contractors} onBack={() => setSelectedProperty(null)} onTogglePaid={togglePaid} onDeleteLog={deleteLog} onUpdateLog={updateLog} onBatchPay={batchPay} />
           ) : (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
