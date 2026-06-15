@@ -171,10 +171,12 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
 }
 
 
-function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, onDeleteLog, onUpdateLog }: {
+function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onUpdateContractor, onDeleteContractor }: {
   contractor: Contractor; logs: Log[]; properties: Property[];
   onBack: () => void; onTogglePaid: (id: string) => void; onDeleteLog: (id: string) => void;
   onUpdateLog: (id: string, fields: Partial<Log>) => void;
+  onUpdateContractor: (id: string, field: string, value: string | number) => void;
+  onDeleteContractor: (id: string) => void;
 }) {
   const cLogs = logs.filter((l) => l.contractor_id === contractor.id);
   const owedLogs = cLogs.filter((l) => !l.paid);
@@ -190,13 +192,16 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
 
   const [editLog, setEditLog] = useState<Log | null>(null);
   const [editForm, setEditForm] = useState({ hours: "", date: "", note: "" });
-  const [showEditWarning, setShowEditWarning] = useState(false);
+  const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
+  const [showDeleteContractor, setShowDeleteContractor] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editingRate, setEditingRate] = useState(false);
+  const [nameVal, setNameVal] = useState(contractor.name);
+  const [rateVal, setRateVal] = useState(String(contractor.rate));
 
   const openEdit = (log: Log) => {
     setEditLog(log);
     setEditForm({ hours: String(log.hours), date: log.date, note: log.note || "" });
-    if (log.paid) setShowEditWarning(true);
-    else setShowEditWarning(false);
   };
 
   const saveEdit = () => {
@@ -204,6 +209,9 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
     onUpdateLog(editLog.id, { hours: parseFloat(editForm.hours) || editLog.hours, date: editForm.date, note: editForm.note });
     setEditLog(null);
   };
+
+  const confirmDeleteLog = (id: string) => setDeleteLogId(id);
+  const doDeleteLog = () => { if (deleteLogId) { onDeleteLog(deleteLogId); setDeleteLogId(null); } };
 
   const LogRow = ({ log, isPaid }: { log: Log; isPaid: boolean }) => {
     const prop = properties.find((p) => p.id === log.property_id);
@@ -224,10 +232,10 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
           {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
           <div style={{ fontWeight: 700, fontSize: 14, color: isPaid ? C.green : C.yellow }}>{$$(net)}</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={() => openEdit(log)} style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 12px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✏️ Edit</button>
           <Btn v={isPaid ? "ghost" : "success"} onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 12px", fontSize: 12 }}>{isPaid ? "✓ Paid" : "Mark Paid"}</Btn>
-          <button onClick={() => onDeleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
+          <button onClick={() => confirmDeleteLog(log.id)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "6px 12px", color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete</button>
         </div>
       </div>
     );
@@ -236,13 +244,35 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
   return (
     <div>
       <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>← Back to Crew</button>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+
+      {/* Contractor header — fully editable */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", marginBottom: 28, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: contractor.color + "22", border: `2px solid ${contractor.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: contractor.color, fontWeight: 800, fontSize: 18 }}>{initials(contractor.name)}</div>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{contractor.name}</h1>
-          <p style={{ color: C.muted, margin: "4px 0 0", fontSize: 14 }}>{$$(contractor.rate)}/hr</p>
+        <div style={{ flex: 1 }}>
+          {editingName ? (
+            <input autoFocus value={nameVal} onChange={(e) => setNameVal(e.target.value)}
+              onBlur={() => { onUpdateContractor(contractor.id, "name", nameVal); setEditingName(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { onUpdateContractor(contractor.id, "name", nameVal); setEditingName(false); } }}
+              style={{ background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "4px 10px", color: C.text, fontSize: 18, fontWeight: 800, outline: "none", width: "100%" }} />
+          ) : (
+            <div onClick={() => setEditingName(true)} style={{ fontSize: 20, fontWeight: 800, cursor: "text", borderBottom: `1px dashed ${C.border}` }} title="Click to edit name">{contractor.name}</div>
+          )}
+          {editingRate ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+              <span style={{ color: C.muted, fontSize: 13 }}>$</span>
+              <input autoFocus value={rateVal} onChange={(e) => setRateVal(e.target.value)} type="number"
+                onBlur={() => { onUpdateContractor(contractor.id, "rate", parseFloat(rateVal) || contractor.rate); setEditingRate(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { onUpdateContractor(contractor.id, "rate", parseFloat(rateVal) || contractor.rate); setEditingRate(false); } }}
+                style={{ background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "4px 10px", color: C.text, fontSize: 14, outline: "none", width: 80 }} />
+              <span style={{ color: C.muted, fontSize: 13 }}>/hr</span>
+            </div>
+          ) : (
+            <div onClick={() => setEditingRate(true)} style={{ color: C.muted, fontSize: 13, marginTop: 6, cursor: "text", borderBottom: `1px dashed ${C.border}`, display: "inline-block" }} title="Click to edit rate">{$$(contractor.rate)}/hr</div>
+          )}
         </div>
+        <button onClick={() => setShowDeleteContractor(true)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 14px", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete Contractor</button>
       </div>
+
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
         <StatCard label="Total Owed" value={$$(totalOwed)} color={C.red} icon="🔴" />
         <StatCard label="Total Paid" value={$$(totalPaid)} color={C.green} icon="✅" />
@@ -250,7 +280,6 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
         <StatCard label="Entries" value={cLogs.length} color={C.accentLight} icon="📋" />
       </div>
 
-      {/* Owed */}
       {owedLogs.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Unpaid — {$$(totalOwed)} owed</div>
@@ -260,7 +289,6 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
         </div>
       )}
 
-      {/* Paid history */}
       {paidLogs.length > 0 && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Paid History — {$$(totalPaid)} total</div>
@@ -272,12 +300,12 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
 
       {cLogs.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>👷</div><div style={{ fontWeight: 600 }}>No entries yet for this contractor</div></div>}
 
-      {/* Edit modal */}
+      {/* Edit log modal */}
       {editLog && (
-        <Modal title="Edit Entry" onClose={() => setEditLog(null)}>
-          {showEditWarning && (
+        <Modal title={editLog.paid ? "Edit Paid Entry" : "Edit Entry"} onClose={() => setEditLog(null)}>
+          {editLog.paid && (
             <div style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.yellow }}>
-              ⚠️ This entry is already marked as paid. Editing it will update the paid record.
+              ⚠️ This entry is marked as paid. Changes will update the paid record.
             </div>
           )}
           <Field label="Hours" type="number" value={editForm.hours} onChange={(e) => setEditForm({ ...editForm, hours: e.target.value })} />
@@ -286,6 +314,32 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn v="ghost" onClick={() => setEditLog(null)}>Cancel</Btn>
             <Btn onClick={saveEdit}>Save Changes</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete log warning */}
+      {deleteLogId && (
+        <Modal title="Delete Entry?" onClose={() => setDeleteLogId(null)}>
+          <div style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.red }}>
+            ⚠️ This will permanently delete this log entry. This cannot be undone.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setDeleteLogId(null)}>Cancel</Btn>
+            <Btn v="danger" onClick={doDeleteLog}>Yes, Delete</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete contractor warning */}
+      {showDeleteContractor && (
+        <Modal title="Delete Contractor?" onClose={() => setShowDeleteContractor(false)}>
+          <div style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.red }}>
+            ⚠️ This will permanently delete <strong>{contractor.name}</strong> and all their log entries. This cannot be undone.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setShowDeleteContractor(false)}>Cancel</Btn>
+            <Btn v="danger" onClick={() => { onDeleteContractor(contractor.id); onBack(); }}>Yes, Delete</Btn>
           </div>
         </Modal>
       )}
@@ -533,6 +587,8 @@ export default function GetPaid() {
               onTogglePaid={togglePaid}
               onDeleteLog={deleteLog}
               onUpdateLog={updateLog}
+              onUpdateContractor={updateContractor}
+              onDeleteContractor={deleteContractor}
             />
           ) : (
           <div>
