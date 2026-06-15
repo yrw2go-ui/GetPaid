@@ -77,7 +77,7 @@ function CategoryPill({ cat }: { cat: string }) {
 // ── Receipt Scanner modal ─────────────────────────────────────────────────────
 function ReceiptScanModal({ properties, onComplete, onClose }: {
   properties: Property[];
-  onComplete: (expense: Omit<Expense, "id">, items: ExpenseItem[]) => Promise<void>;
+  onComplete: (expense: Omit<Expense, "id"> & { items: ExpenseItem[] }) => Promise<void>;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<"upload"|"scanning"|"review"|"assign">("upload");
@@ -438,9 +438,10 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
     setLoading(false);
   };
 
-  const saveExpense = async (data: Omit<Expense, "id">, items: ExpenseItem[]) => {
+  const saveExpense = async (data: Omit<Expense, "id"> & { items: ExpenseItem[] }) => {
+    const { items, ...expData } = data;
     const { data: exp } = await supabase.from("expenses").insert({
-      property_id: data.property_id, store: data.store, date: data.date, notes: data.notes,
+      property_id: expData.property_id, store: expData.store, date: expData.date, notes: expData.notes,
     }).select().single();
     if (exp) {
       const itemRows = items.map(item => ({ ...item, expense_id: exp.id }));
