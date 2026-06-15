@@ -186,6 +186,8 @@ export default function GetPaid() {
   const [cForm, setCForm] = useState({ name: "", rate: "" });
   const [pForm, setPForm] = useState({ address: "", city: "" });
   const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
+  const [deductions, setDeductions] = useState<{title: string; amount: string}[]>([]);
+  const [dedForm, setDedForm] = useState({ title: "", amount: "" });
 
   const computedHours = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours || "0");
 
