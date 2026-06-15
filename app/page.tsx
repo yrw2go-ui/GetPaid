@@ -200,7 +200,10 @@ export default function GetPaid() {
       ]);
       setContractors(c || []);
       setProperties(p || []);
-      setLogs(l || []);
+      setLogs((l || []).map((log: any) => ({
+        ...log,
+        deductions: typeof log.deductions === "string" ? JSON.parse(log.deductions || "[]") : (log.deductions || []),
+      })));
       setLoading(false);
     }
     load();
@@ -226,7 +229,17 @@ export default function GetPaid() {
     const h = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours);
     if (!h || h <= 0) return;
     const parsedDeductions = deductions.map(d => ({ title: d.title, amount: parseFloat(d.amount) || 0 }));
-    const { data } = await supabase.from("logs").insert({ contractor_id: lForm.contractorId, property_id: lForm.propertyId, hours: h, date: lForm.date, note: lForm.note, paid: false, deductions: parsedDeductions }).select().single();
+    const insertData = {
+      contractor_id: lForm.contractorId,
+      property_id: lForm.propertyId,
+      hours: h,
+      date: lForm.date,
+      note: lForm.note || "",
+      paid: false,
+      deductions: JSON.stringify(parsedDeductions),
+    };
+    const { data, error } = await supabase.from("logs").insert(insertData).select().single();
+    if (error) { console.error("Log save error:", error); alert("Error saving: " + error.message); return; }
     if (data) setLogs([...logs, { ...data, deductions: parsedDeductions }]);
     setLForm({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
     setDeductions([]);
