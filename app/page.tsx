@@ -34,7 +34,7 @@ function calcHours(start: string, end: string): number {
 interface Contractor { id: string; name: string; rate: number; color: string; }
 interface Property { id: string; address: string; city: string; }
 interface Deduction { title: string; amount: number; }
-interface Log { id: string; contractor_id: string; property_id: string; hours: number; date: string; paid: boolean; note: string; deductions: Deduction[]; }
+interface Log { id: string; contractor_id: string; property_id: string; hours: number; rate_override: number | null; date: string; paid: boolean; note: string; deductions: Deduction[]; }
 
 const COLORS = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#14b8a6"];
 
@@ -111,8 +111,9 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
   onUpdateLog: (id: string, fields: Partial<Log>) => void;
 }) {
   const pLogs = logs.filter((l) => l.property_id === property.id);
+  const effectiveRate = (log: Log, defaultRate: number) => log.rate_override != null ? Number(log.rate_override) : defaultRate;
   const netAmt = (log: Log, rate: number) => {
-    const gross = Number(log.hours) * rate;
+    const gross = Number(log.hours) * effectiveRate(log, rate);
     const ded = (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0);
     return Math.max(0, gross - ded);
   };
@@ -125,7 +126,7 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
   const [payAllDedForm, setPayAllDedForm] = useState({ title: "", amount: "" });
   const [payAllDate, setPayAllDate] = useState(new Date().toISOString().split("T")[0]);
   const [editLogTarget, setEditLogTarget] = useState<Log | null>(null);
-  const [editLogForm, setEditLogForm] = useState({ hours: "", date: "", note: "" });
+  const [editLogForm, setEditLogForm] = useState({ hours: "", date: "", note: "", rateOverride: "", useRateOverride: false });
   const [deleteLogTarget, setDeleteLogTarget] = useState<string | null>(null);
 
   const byContractor = contractors.map((con) => {
@@ -160,12 +161,13 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
 
   const openEditLog = (log: Log) => {
     setEditLogTarget(log);
-    setEditLogForm({ hours: String(log.hours), date: log.date, note: log.note || "" });
+    setEditLogForm({ hours: String(log.hours), date: log.date, note: log.note || "", rateOverride: log.rate_override != null ? String(log.rate_override) : "", useRateOverride: log.rate_override != null });
   };
 
   const saveEditLog = async () => {
     if (!editLogTarget) return;
-    const fields = { hours: parseFloat(editLogForm.hours) || editLogTarget.hours, date: editLogForm.date, note: editLogForm.note };
+    const rateOv = editLogForm.useRateOverride && editLogForm.rateOverride ? parseFloat(editLogForm.rateOverride) : null;
+    const fields = { hours: parseFloat(editLogForm.hours) || editLogTarget.hours, date: editLogForm.date, note: editLogForm.note, rate_override: rateOv };
     await supabase.from("logs").update(fields).eq("id", editLogTarget.id);
     onUpdateLog(editLogTarget.id, fields);
     setEditLogTarget(null);
@@ -229,6 +231,7 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
+                      {log.rate_override != null && <div style={{ fontSize: 11, color: C.accentLight }}>{$$(Number(log.rate_override))}/hr override</div>}
                       {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
                       <div style={{ fontWeight: 700, fontSize: 14, color: C.yellow }}>{$$(net)}</div>
                     </div>
@@ -328,6 +331,24 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
           <Field label="Hours" type="number" value={editLogForm.hours} onChange={(e) => setEditLogForm({ ...editLogForm, hours: e.target.value })} />
           <Field label="Date" type="date" value={editLogForm.date} onChange={(e) => setEditLogForm({ ...editLogForm, date: e.target.value })} />
           <Field label="Note" placeholder="Optional note" value={editLogForm.note} onChange={(e) => setEditLogForm({ ...editLogForm, note: e.target.value })} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label style={{ color: C.sub, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8 }}>Rate Override</label>
+              <button onClick={() => setEditLogForm({ ...editLogForm, useRateOverride: !editLogForm.useRateOverride, rateOverride: "" })}
+                style={{ background: editLogForm.useRateOverride ? C.accentGlow : "transparent", border: `1px solid ${editLogForm.useRateOverride ? C.accent : C.border}`, borderRadius: 6, padding: "3px 10px", color: editLogForm.useRateOverride ? C.accentLight : C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                {editLogForm.useRateOverride ? "On" : "Use default"}
+              </button>
+            </div>
+            {editLogForm.useRateOverride && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: C.muted, fontSize: 13 }}>$</span>
+                <input type="number" placeholder="Custom rate" value={editLogForm.rateOverride}
+                  onChange={(e) => setEditLogForm({ ...editLogForm, rateOverride: e.target.value })}
+                  style={{ flex: 1, background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 14, outline: "none" }} />
+                <span style={{ color: C.muted, fontSize: 13 }}>/hr</span>
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn v="ghost" onClick={() => setEditLogTarget(null)}>Cancel</Btn>
             <Btn onClick={saveEditLog}>Save Changes</Btn>
@@ -362,8 +383,9 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
   const cLogs = logs.filter((l) => l.contractor_id === contractor.id);
   const owedLogs = cLogs.filter((l) => !l.paid);
   const paidLogs = cLogs.filter((l) => l.paid);
+  const effectiveRate2 = (log: Log) => log.rate_override != null ? Number(log.rate_override) : contractor.rate;
   const netAmt = (log: Log) => {
-    const gross = Number(log.hours) * contractor.rate;
+    const gross = Number(log.hours) * effectiveRate2(log);
     const ded = (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0);
     return Math.max(0, gross - ded);
   };
@@ -602,7 +624,7 @@ export default function GetPaid() {
 
   const [cForm, setCForm] = useState({ name: "", rate: "" });
   const [pForm, setPForm] = useState({ address: "", city: "" });
-  const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
+  const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false, rateOverride: "", useRateOverride: false });
   const [deductions, setDeductions] = useState<{title: string; amount: string}[]>([]);
   const [dedForm, setDedForm] = useState({ title: "", amount: "" });
 
@@ -651,6 +673,7 @@ export default function GetPaid() {
     const h = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours);
     if (!h || h <= 0) return;
     const parsedDeductions = deductions.map(d => ({ title: d.title, amount: parseFloat(d.amount) || 0 }));
+    const rateOverrideVal = lForm.useRateOverride && lForm.rateOverride ? parseFloat(lForm.rateOverride) : null;
     const insertData = {
       contractor_id: lForm.contractorId,
       property_id: lForm.propertyId,
@@ -659,11 +682,12 @@ export default function GetPaid() {
       note: lForm.note || "",
       paid: false,
       deductions: JSON.stringify(parsedDeductions),
+      rate_override: rateOverrideVal,
     };
     const { data, error } = await supabase.from("logs").insert(insertData).select().single();
     if (error) { console.error("Log save error:", error); alert("Error saving: " + error.message); return; }
     if (data) setLogs([...logs, { ...data, deductions: parsedDeductions }]);
-    setLForm({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
+    setLForm({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false, rateOverride: "", useRateOverride: false });
     setDeductions([]);
     setDedForm({ title: "", amount: "" });
     setShowLog(false);
@@ -725,7 +749,8 @@ export default function GetPaid() {
   });
 
   const totalDedAmount = deductions.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
-  const grossPreview = lForm.contractorId && computedHours > 0 ? (contractors.find((c) => c.id === lForm.contractorId)?.rate || 0) * computedHours : 0;
+  const activeRate = lForm.useRateOverride && lForm.rateOverride ? parseFloat(lForm.rateOverride) : (contractors.find((c) => c.id === lForm.contractorId)?.rate || 0);
+  const grossPreview = lForm.contractorId && computedHours > 0 ? activeRate * computedHours : 0;
   const logPreviewAmount = Math.max(0, grossPreview - totalDedAmount);
 
   const TABS = [
@@ -996,10 +1021,30 @@ export default function GetPaid() {
 
       {showLog && (
         <Modal title="Log Hours" onClose={() => setShowLog(false)}>
-          <Sel label="Crew Member" value={lForm.contractorId} onChange={(e) => setLForm({ ...lForm, contractorId: e.target.value })}>
+          <Sel label="Crew Member" value={lForm.contractorId} onChange={(e) => setLForm({ ...lForm, contractorId: e.target.value, rateOverride: "", useRateOverride: false })}>
             <option value="">Select crew member...</option>
             {contractors.map((c) => <option key={c.id} value={c.id}>{c.name} ({$$(c.rate)}/hr)</option>)}
           </Sel>
+          {lForm.contractorId && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <label style={{ color: C.sub, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8 }}>Rate Override</label>
+                <button onClick={() => setLForm({ ...lForm, useRateOverride: !lForm.useRateOverride, rateOverride: "" })}
+                  style={{ background: lForm.useRateOverride ? C.accentGlow : "transparent", border: `1px solid ${lForm.useRateOverride ? C.accent : C.border}`, borderRadius: 6, padding: "3px 10px", color: lForm.useRateOverride ? C.accentLight : C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  {lForm.useRateOverride ? "On" : "Use default"}
+                </button>
+              </div>
+              {lForm.useRateOverride && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>$</span>
+                  <input type="number" placeholder={String(contractors.find(c => c.id === lForm.contractorId)?.rate || "")} value={lForm.rateOverride}
+                    onChange={(e) => setLForm({ ...lForm, rateOverride: e.target.value })}
+                    style={{ flex: 1, background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 14, outline: "none" }} />
+                  <span style={{ color: C.muted, fontSize: 13 }}>/hr (this entry only)</span>
+                </div>
+              )}
+            </div>
+          )}
           <Sel label="Property" value={lForm.propertyId} onChange={(e) => setLForm({ ...lForm, propertyId: e.target.value })}>
             <option value="">Select property...</option>
             {properties.map((p) => <option key={p.id} value={p.id}>{p.address}</option>)}
