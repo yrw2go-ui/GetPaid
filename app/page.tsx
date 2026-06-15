@@ -394,7 +394,7 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
   const totalHrs = cLogs.reduce((s, l) => s + Number(l.hours), 0);
 
   const [editLog, setEditLog] = useState<Log | null>(null);
-  const [editForm, setEditForm] = useState({ hours: "", date: "", note: "" });
+  const [editForm, setEditForm] = useState({ hours: "", date: "", note: "", rateOverride: "", useRateOverride: false });
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
   const [showDeleteContractor, setShowDeleteContractor] = useState(false);
   const [showContractorLog, setShowContractorLog] = useState(false);
@@ -406,12 +406,15 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
 
   const openEdit = (log: Log) => {
     setEditLog(log);
-    setEditForm({ hours: String(log.hours), date: log.date, note: log.note || "" });
+    setEditForm({ hours: String(log.hours), date: log.date, note: log.note || "", rateOverride: log.rate_override != null ? String(log.rate_override) : "", useRateOverride: log.rate_override != null });
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editLog) return;
-    onUpdateLog(editLog.id, { hours: parseFloat(editForm.hours) || editLog.hours, date: editForm.date, note: editForm.note });
+    const rateOv = editForm.useRateOverride && editForm.rateOverride ? parseFloat(editForm.rateOverride) : null;
+    const fields = { hours: parseFloat(editForm.hours) || editLog.hours, date: editForm.date, note: editForm.note, rate_override: rateOv };
+    await supabase.from("logs").update(fields).eq("id", editLog.id);
+    onUpdateLog(editLog.id, fields);
     setEditLog(null);
   };
 
@@ -434,6 +437,7 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
+          {log.rate_override != null && <div style={{ fontSize: 11, color: C.accentLight }}>{$$(Number(log.rate_override))}/hr</div>}
           {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
           <div style={{ fontWeight: 700, fontSize: 14, color: isPaid ? C.green : C.yellow }}>{$$(net)}</div>
         </div>
@@ -519,6 +523,32 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
           <Field label="Hours" type="number" value={editForm.hours} onChange={(e) => setEditForm({ ...editForm, hours: e.target.value })} />
           <Field label="Date" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
           <Field label="Note" placeholder="Optional note" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label style={{ color: C.sub, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8 }}>Rate Override</label>
+              <button onClick={() => setEditForm({ ...editForm, useRateOverride: !editForm.useRateOverride, rateOverride: "" })}
+                style={{ background: editForm.useRateOverride ? C.accentGlow : "transparent", border: `1px solid ${editForm.useRateOverride ? C.accent : C.border}`, borderRadius: 6, padding: "3px 10px", color: editForm.useRateOverride ? C.accentLight : C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                {editForm.useRateOverride ? "On" : "Use default"}
+              </button>
+            </div>
+            {!editForm.useRateOverride && (
+              <div style={{ fontSize: 12, color: C.muted }}>Default: {$$(contractor.rate)}/hr</div>
+            )}
+            {editForm.useRateOverride && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: C.muted, fontSize: 13 }}>$</span>
+                <input type="number" placeholder={String(contractor.rate)} value={editForm.rateOverride}
+                  onChange={(e) => setEditForm({ ...editForm, rateOverride: e.target.value })}
+                  style={{ flex: 1, background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 14, outline: "none" }} />
+                <span style={{ color: C.muted, fontSize: 13 }}>/hr (this entry only)</span>
+              </div>
+            )}
+            {editForm.useRateOverride && editForm.rateOverride && editForm.hours && (
+              <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}33`, borderRadius: 8, padding: "8px 12px", marginTop: 8, fontSize: 13, color: C.accentLight }}>
+                New total: <strong>{$$(parseFloat(editForm.rateOverride) * parseFloat(editForm.hours))}</strong>
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn v="ghost" onClick={() => setEditLog(null)}>Cancel</Btn>
             <Btn onClick={saveEdit}>Save Changes</Btn>
@@ -758,7 +788,39 @@ export default function GetPaid() {
     { id: "contractors", label: "Crew", icon: "👷" },
     { id: "properties", label: "Properties", icon: "🏠" },
     { id: "logs", label: "Hours", icon: "🕐" },
+    { id: "1099", label: "1099", icon: "📋" },
   ];
+
+  const [taxYear, setTaxYear] = useState(new Date().getFullYear());
+
+  const tax1099 = contractors.map((con) => {
+    const cLogs = logs.filter((l) => l.contractor_id === con.id && new Date(l.date).getFullYear() === taxYear);
+    const effectiveRate = (log: Log) => log.rate_override != null ? Number(log.rate_override) : con.rate;
+    const grossEarnings = cLogs.reduce((s, l) => s + Number(l.hours) * effectiveRate(l), 0);
+    const totalDeductions = cLogs.reduce((s, l) => s + (l.deductions || []).reduce((ds: number, d: Deduction) => ds + Number(d.amount), 0), 0);
+    const netEarnings = Math.max(0, grossEarnings - totalDeductions);
+    const totalHours = cLogs.reduce((s, l) => s + Number(l.hours), 0);
+    const paidEarnings = cLogs.filter(l => l.paid).reduce((s, l) => {
+      const gross = Number(l.hours) * effectiveRate(l);
+      const ded = (l.deductions || []).reduce((ds: number, d: Deduction) => ds + Number(d.amount), 0);
+      return s + Math.max(0, gross - ded);
+    }, 0);
+    const unpaidEarnings = cLogs.filter(l => !l.paid).reduce((s, l) => {
+      const gross = Number(l.hours) * effectiveRate(l);
+      const ded = (l.deductions || []).reduce((ds: number, d: Deduction) => ds + Number(d.amount), 0);
+      return s + Math.max(0, gross - ded);
+    }, 0);
+    const byProperty = properties.map(p => {
+      const pLogs = cLogs.filter(l => l.property_id === p.id);
+      if (pLogs.length === 0) return null;
+      const pGross = pLogs.reduce((s, l) => s + Number(l.hours) * effectiveRate(l), 0);
+      const pDed = pLogs.reduce((s, l) => s + (l.deductions || []).reduce((ds: number, d: Deduction) => ds + Number(d.amount), 0), 0);
+      return { property: p, hours: pLogs.reduce((s, l) => s + Number(l.hours), 0), gross: pGross, net: Math.max(0, pGross - pDed) };
+    }).filter(Boolean) as { property: Property; hours: number; gross: number; net: number }[];
+    return { con, grossEarnings, netEarnings, totalDeductions, totalHours, paidEarnings, unpaidEarnings, byProperty, entryCount: cLogs.length };
+  });
+
+  const grandTotal1099 = tax1099.reduce((s, c) => s + c.netEarnings, 0);
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
@@ -991,6 +1053,108 @@ export default function GetPaid() {
                 );
               })}
               {logs.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>🕐</div><div style={{ fontWeight: 600 }}>No hours logged yet</div></div>}
+            </div>
+          </div>
+        )}
+
+        {/* 1099 */}
+        {tab === "1099" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
+              <div>
+                <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>1099 Summary</h1>
+                <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>Total contractor earnings by year</p>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => setTaxYear(taxYear - 1)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.text, fontSize: 14, cursor: "pointer" }}>&#8249;</button>
+                <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 18px", color: C.accentLight, fontWeight: 800, fontSize: 16, minWidth: 70, textAlign: "center" }}>{taxYear}</div>
+                <button onClick={() => setTaxYear(taxYear + 1)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.text, fontSize: 14, cursor: "pointer" }}>&#8250;</button>
+              </div>
+            </div>
+
+            {/* Grand total banner */}
+            <div style={{ background: `linear-gradient(135deg, ${C.accent}22, ${C.accentGlow})`, border: `1px solid ${C.accent}44`, borderRadius: 14, padding: "20px 24px", marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentLight, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Total Paid Out {taxYear}</div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: C.text, letterSpacing: -1 }}>{$$(grandTotal1099)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: C.text }}>{tax1099.filter(c => c.entryCount > 0).length}</div>
+                  <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Contractors</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 700, fontSize: 18, color: C.text }}>{hrs(tax1099.reduce((s, c) => s + c.totalHours, 0))}</div>
+                  <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Total Hours</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Per contractor cards */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {tax1099.filter(c => c.entryCount > 0).map(({ con, grossEarnings, netEarnings, totalDeductions, totalHours, paidEarnings, unpaidEarnings, byProperty }) => (
+                <div key={con.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+                  {/* Header */}
+                  <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 14, background: con.color + "22", border: `2px solid ${con.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: con.color, fontWeight: 800, fontSize: 16 }}>{initials(con.name)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 17 }}>{con.name}</div>
+                      <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{hrs(totalHours)} worked &middot; {con.entryCount || 0} entries</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: C.text }}>{$$(netEarnings)}</div>
+                      <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Net Earnings</div>
+                    </div>
+                  </div>
+
+                  {/* Breakdown */}
+                  <div style={{ padding: "16px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 24, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{$$(grossEarnings)}</div>
+                      <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Gross</div>
+                    </div>
+                    {totalDeductions > 0 && <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.red }}>-{$$(totalDeductions)}</div>
+                      <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Deductions</div>
+                    </div>}
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{$$(paidEarnings)}</div>
+                      <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Paid</div>
+                    </div>
+                    {unpaidEarnings > 0 && <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.yellow }}>{$$(unpaidEarnings)}</div>
+                      <div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Still Owed</div>
+                    </div>}
+                    {netEarnings >= 600 && (
+                      <div style={{ marginLeft: "auto", background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 8, padding: "6px 14px", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 14 }}>⚠️</span>
+                        <span style={{ color: C.yellow, fontSize: 12, fontWeight: 700 }}>1099 Required (&ge;$600)</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Per property breakdown */}
+                  {byProperty.map(({ property, hours, gross, net }) => (
+                    <div key={property.id} style={{ padding: "12px 22px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 16 }}>🏠</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{property.address}</div>
+                        <div style={{ color: C.muted, fontSize: 12 }}>{property.city} &middot; {hrs(hours)}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        {gross !== net && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
+                        <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{$$(net)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {tax1099.filter(c => c.entryCount > 0).length === 0 && (
+                <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+                  <div style={{ fontWeight: 600 }}>No earnings logged for {taxYear}</div>
+                </div>
+              )}
             </div>
           </div>
         )}
