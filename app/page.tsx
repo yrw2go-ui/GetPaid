@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import ExpensesTab from "./expenses";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -766,6 +767,7 @@ export default function GetPaid() {
     { id: "properties", label: "Properties", icon: "🏠" },
     { id: "logs", label: "Hours", icon: "🕐" },
     { id: "1099", label: "1099", icon: "📋" },
+    { id: "expenses", label: "Expenses", icon: "🧾" },
   ];
 
   if (loading) return (
@@ -998,6 +1000,11 @@ export default function GetPaid() {
               {!logs.length && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>🕐</div><div style={{ fontWeight: 600 }}>No hours logged yet</div></div>}
             </div>
           </div>
+        )}
+
+        {/* EXPENSES */}
+        {tab === "expenses" && (
+          <ExpensesTab properties={properties} />
         )}
 
         {/* 1099 */}
