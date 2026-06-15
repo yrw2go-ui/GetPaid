@@ -105,78 +105,259 @@ function StatCard({ label, value, color, icon }: { label: string; value: string 
   );
 }
 
-function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onDeleteLog }: {
+function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onDeleteLog, onUpdateLog }: {
   property: Property; logs: Log[]; contractors: Contractor[];
   onBack: () => void; onTogglePaid: (id: string) => void; onDeleteLog: (id: string) => void;
+  onUpdateLog: (id: string, fields: Partial<Log>) => void;
 }) {
   const pLogs = logs.filter((l) => l.property_id === property.id);
-  const totalOwed = pLogs.filter((l) => !l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? con.rate * l.hours : 0); }, 0);
-  const totalPaid = pLogs.filter((l) => l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? con.rate * l.hours : 0); }, 0);
+  const netAmt = (log: Log, rate: number) => {
+    const gross = Number(log.hours) * rate;
+    const ded = (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0);
+    return Math.max(0, gross - ded);
+  };
+  const totalOwed = pLogs.filter((l) => !l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? netAmt(l, con.rate) : 0); }, 0);
+  const totalPaid = pLogs.filter((l) => l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? netAmt(l, con.rate) : 0); }, 0);
   const totalHrs = pLogs.reduce((sum, l) => sum + Number(l.hours), 0);
+
+  const [payAllTarget, setPayAllTarget] = useState<{ con: Contractor; owedLogs: Log[]; totalOwed: number } | null>(null);
+  const [payAllDeds, setPayAllDeds] = useState<{ title: string; amount: string }[]>([]);
+  const [payAllDedForm, setPayAllDedForm] = useState({ title: "", amount: "" });
+  const [payAllDate, setPayAllDate] = useState(new Date().toISOString().split("T")[0]);
+  const [editLogTarget, setEditLogTarget] = useState<Log | null>(null);
+  const [editLogForm, setEditLogForm] = useState({ hours: "", date: "", note: "" });
+  const [deleteLogTarget, setDeleteLogTarget] = useState<string | null>(null);
 
   const byContractor = contractors.map((con) => {
     const cLogs = pLogs.filter((l) => l.contractor_id === con.id);
     if (cLogs.length === 0) return null;
-    const owed = cLogs.filter((l) => !l.paid).reduce((s, l) => s + Number(l.hours) * con.rate, 0);
-    const paid = cLogs.filter((l) => l.paid).reduce((s, l) => s + Number(l.hours) * con.rate, 0);
+    const owedLogs = cLogs.filter((l) => !l.paid);
+    const paidLogs = cLogs.filter((l) => l.paid);
+    const owed = owedLogs.reduce((s, l) => s + netAmt(l, con.rate), 0);
+    const paid = paidLogs.reduce((s, l) => s + netAmt(l, con.rate), 0);
     const hours = cLogs.reduce((s, l) => s + Number(l.hours), 0);
-    return { con, cLogs, owed, paid, hours };
-  }).filter(Boolean) as { con: Contractor; cLogs: Log[]; owed: number; paid: number; hours: number }[];
+    return { con, cLogs, owedLogs, paidLogs, owed, paid, hours };
+  }).filter(Boolean) as { con: Contractor; cLogs: Log[]; owedLogs: Log[]; paidLogs: Log[]; owed: number; paid: number; hours: number }[];
+
+  const openPayAll = (con: Contractor, owedLogs: Log[], totalOwed: number) => {
+    setPayAllTarget({ con, owedLogs, totalOwed });
+    setPayAllDeds([]);
+    setPayAllDedForm({ title: "", amount: "" });
+    setPayAllDate(new Date().toISOString().split("T")[0]);
+  };
+
+  const doPayAll = async () => {
+    if (!payAllTarget) return;
+    const finalDeds = payAllDeds.map(d => ({ title: d.title, amount: parseFloat(d.amount) || 0 }));
+    const today = payAllDate;
+    for (const log of payAllTarget.owedLogs) {
+      const merged = [...(log.deductions || []), ...finalDeds];
+      await supabase.from("logs").update({ paid: true, date: today, deductions: JSON.stringify(merged) }).eq("id", log.id);
+      onUpdateLog(log.id, { paid: true, date: today, deductions: merged });
+    }
+    setPayAllTarget(null);
+  };
+
+  const openEditLog = (log: Log) => {
+    setEditLogTarget(log);
+    setEditLogForm({ hours: String(log.hours), date: log.date, note: log.note || "" });
+  };
+
+  const saveEditLog = async () => {
+    if (!editLogTarget) return;
+    const fields = { hours: parseFloat(editLogForm.hours) || editLogTarget.hours, date: editLogForm.date, note: editLogForm.note };
+    await supabase.from("logs").update(fields).eq("id", editLogTarget.id);
+    onUpdateLog(editLogTarget.id, fields);
+    setEditLogTarget(null);
+  };
+
+  const doDeleteLog = async () => {
+    if (!deleteLogTarget) return;
+    await supabase.from("logs").delete().eq("id", deleteLogTarget);
+    onDeleteLog(deleteLogTarget);
+    setDeleteLogTarget(null);
+  };
+
+  const payAllDedsTotal = payAllDeds.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
 
   return (
     <div>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>← Back to Properties</button>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>&#8592; Back to Properties</button>
       <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{property.address}</h1>
       <p style={{ color: C.muted, margin: "4px 0 24px", fontSize: 14 }}>{property.city}</p>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
-        <StatCard label="Total Owed" value={$$(totalOwed)} color={C.red} icon="🔴" />
-        <StatCard label="Total Paid" value={$$(totalPaid)} color={C.green} icon="✅" />
-        <StatCard label="Hours Logged" value={hrs(totalHrs)} color={C.yellow} icon="⏱️" />
-        <StatCard label="Entries" value={pLogs.length} color={C.accentLight} icon="📋" />
+        <StatCard label="Total Owed" value={$$(totalOwed)} color={C.red} icon="&#128308;" />
+        <StatCard label="Total Paid" value={$$(totalPaid)} color={C.green} icon="&#9989;" />
+        <StatCard label="Hours Logged" value={hrs(totalHrs)} color={C.yellow} icon="&#9200;" />
+        <StatCard label="Entries" value={pLogs.length} color={C.accentLight} icon="&#128203;" />
       </div>
-      {byContractor.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div><div style={{ fontWeight: 600 }}>No hours logged for this property yet</div></div>}
-      {byContractor.map(({ con, cLogs, owed, paid, hours }) => (
-        <div key={con.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 16, overflow: "hidden" }}>
+
+      {byContractor.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>&#127968;</div><div style={{ fontWeight: 600 }}>No hours logged for this property yet</div></div>}
+
+      {byContractor.map(({ con, owedLogs, paidLogs, owed, paid, hours }) => (
+        <div key={con.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 20, overflow: "hidden" }}>
           <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: con.color + "22", border: `2px solid ${con.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: con.color, fontWeight: 800, fontSize: 14 }}>{initials(con.name)}</div>
-            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 15 }}>{con.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{$$(con.rate)}/hr &middot; {hrs(hours)} total</div></div>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{con.name}</div>
+              <div style={{ color: C.muted, fontSize: 12 }}>{$$(con.rate)}/hr &middot; {hrs(hours)} total</div>
+            </div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               {owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 16 }}>{$$(owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Owed</div></div>}
               {paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 16 }}>{$$(paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Paid</div></div>}
+              {owedLogs.length > 0 && (
+                <button onClick={() => openPayAll(con, owedLogs, owed)}
+                  style={{ background: `linear-gradient(135deg, ${C.green}, #059669)`, border: "none", borderRadius: 10, padding: "10px 18px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: `0 4px 14px ${C.green}44` }}>
+                  Pay All {$$(owed)}
+                </button>
+              )}
             </div>
           </div>
-          {[...cLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => {
-            const amount = con.rate * Number(log.hours);
-            return (
-              <div key={log.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: log.paid ? `${C.green}08` : "transparent" }}>
-                <div style={{ flex: 1, minWidth: 120 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{log.date}</div>
-                  {log.note && <div style={{ color: C.sub, fontSize: 12, marginTop: 2, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
-                </div>
-                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
-                <div style={{ textAlign: "right" }}>
-                  {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(amount)}</div>}
-                  <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0)))}</div>
-                  {(log.deductions || []).map((d: Deduction, i: number) => <div key={i} style={{ fontSize: 11, color: C.red }}>-{d.title} {$$(Number(d.amount))}</div>)}
-                </div>
-                <Btn v={log.paid ? "ghost" : "success"} onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 14px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
-                <button onClick={() => onDeleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
-              </div>
-            );
-          })}
+
+          {owedLogs.length > 0 && (
+            <div>
+              <div style={{ padding: "8px 20px", background: C.redGlow, fontSize: 11, fontWeight: 700, color: C.red, textTransform: "uppercase", letterSpacing: 0.8 }}>Unpaid</div>
+              {[...owedLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => {
+                const gross = con.rate * Number(log.hours);
+                const net = netAmt(log, con.rate);
+                return (
+                  <div key={log.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{log.date}</div>
+                      {log.note && <div style={{ color: C.sub, fontSize: 12, marginTop: 2, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
+                      {(log.deductions || []).map((d: Deduction, i: number) => <div key={i} style={{ fontSize: 11, color: C.red, marginTop: 1 }}>- {d.title}: {$$(Number(d.amount))}</div>)}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
+                      {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 14, color: C.yellow }}>{$$(net)}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button onClick={() => openEditLog(log)} style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 10px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                      <Btn v="success" onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 10px", fontSize: 12 }}>Mark Paid</Btn>
+                      <button onClick={() => setDeleteLogTarget(log.id)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "6px 10px", color: C.red, fontSize: 12, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {paidLogs.length > 0 && (
+            <div>
+              <div style={{ padding: "8px 20px", background: C.greenGlow, fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8 }}>Paid History</div>
+              {[...paidLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => {
+                const gross = con.rate * Number(log.hours);
+                const net = netAmt(log, con.rate);
+                return (
+                  <div key={log.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: `${C.green}06` }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{log.date} <span style={{ color: C.green, fontSize: 11 }}>paid</span></div>
+                      {log.note && <div style={{ color: C.sub, fontSize: 12, marginTop: 2, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
+                      {(log.deductions || []).map((d: Deduction, i: number) => <div key={i} style={{ fontSize: 11, color: C.red, marginTop: 1 }}>- {d.title}: {$$(Number(d.amount))}</div>)}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
+                      {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(gross)}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 14, color: C.green }}>{$$(net)}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button onClick={() => openEditLog(log)} style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 8, padding: "6px 10px", color: C.yellow, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>
+                      <Btn v="ghost" onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 10px", fontSize: 12 }}>Undo Paid</Btn>
+                      <button onClick={() => setDeleteLogTarget(log.id)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "6px 10px", color: C.red, fontSize: 12, cursor: "pointer" }}>Delete</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ))}
+
+      {payAllTarget && (
+        <Modal title={`Pay All — ${payAllTarget.con.name}`} onClose={() => setPayAllTarget(null)}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 8 }}>{payAllTarget.owedLogs.length} entries at {property.address}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: C.text, marginBottom: 4 }}>
+              <span>Gross owed</span><span style={{ fontWeight: 700 }}>{$$(payAllTarget.totalOwed)}</span>
+            </div>
+            {payAllDeds.map((d, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.red, marginBottom: 4 }}>
+                <span>- {d.title}</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span>-{$$(parseFloat(d.amount) || 0)}</span>
+                  <button onClick={() => setPayAllDeds(payAllDeds.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 12 }}>x</button>
+                </div>
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 16 }}>
+              <span style={{ color: C.text }}>Net to Pay</span>
+              <span style={{ color: C.green }}>{$$(Math.max(0, payAllTarget.totalOwed - payAllDedsTotal))}</span>
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Add Deduction (optional)</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input placeholder="Item (e.g. Materials)" value={payAllDedForm.title} onChange={(e) => setPayAllDedForm({ ...payAllDedForm, title: e.target.value })}
+                style={{ flex: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <input placeholder="$0" type="number" value={payAllDedForm.amount} onChange={(e) => setPayAllDedForm({ ...payAllDedForm, amount: e.target.value })}
+                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <button onClick={() => { if (!payAllDedForm.title || !payAllDedForm.amount) return; setPayAllDeds([...payAllDeds, payAllDedForm]); setPayAllDedForm({ title: "", amount: "" }); }}
+                style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 14px", color: C.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add</button>
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Date Paid</label>
+            <input type="date" value={payAllDate} onChange={(e) => setPayAllDate(e.target.value)}
+              style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setPayAllTarget(null)}>Cancel</Btn>
+            <Btn v="success" onClick={doPayAll}>Confirm Payment</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {editLogTarget && (
+        <Modal title={editLogTarget.paid ? "Edit Paid Entry" : "Edit Entry"} onClose={() => setEditLogTarget(null)}>
+          {editLogTarget.paid && (
+            <div style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.yellow }}>
+              Warning: This entry is already marked as paid. Changes will update the paid record.
+            </div>
+          )}
+          <Field label="Hours" type="number" value={editLogForm.hours} onChange={(e) => setEditLogForm({ ...editLogForm, hours: e.target.value })} />
+          <Field label="Date" type="date" value={editLogForm.date} onChange={(e) => setEditLogForm({ ...editLogForm, date: e.target.value })} />
+          <Field label="Note" placeholder="Optional note" value={editLogForm.note} onChange={(e) => setEditLogForm({ ...editLogForm, note: e.target.value })} />
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+            <Btn v="ghost" onClick={() => setEditLogTarget(null)}>Cancel</Btn>
+            <Btn onClick={saveEditLog}>Save Changes</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {deleteLogTarget && (
+        <Modal title="Delete Entry?" onClose={() => setDeleteLogTarget(null)}>
+          <div style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.red }}>
+            Warning: This will permanently delete this log entry and cannot be undone.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setDeleteLogTarget(null)}>Cancel</Btn>
+            <Btn v="danger" onClick={doDeleteLog}>Yes, Delete</Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
 
-function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onUpdateContractor, onDeleteContractor }: {
+function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onUpdateContractor, onDeleteContractor, onAddLog }: {
   contractor: Contractor; logs: Log[]; properties: Property[];
   onBack: () => void; onTogglePaid: (id: string) => void; onDeleteLog: (id: string) => void;
   onUpdateLog: (id: string, fields: Partial<Log>) => void;
   onUpdateContractor: (id: string, field: string, value: string | number) => void;
   onDeleteContractor: (id: string) => void;
+  onAddLog: (log: Log) => void;
 }) {
   const cLogs = logs.filter((l) => l.contractor_id === contractor.id);
   const owedLogs = cLogs.filter((l) => !l.paid);
@@ -194,6 +375,8 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
   const [editForm, setEditForm] = useState({ hours: "", date: "", note: "" });
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
   const [showDeleteContractor, setShowDeleteContractor] = useState(false);
+  const [showContractorLog, setShowContractorLog] = useState(false);
+  const [cLogForm, setCLogForm] = useState({ propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
   const [editingName, setEditingName] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
   const [nameVal, setNameVal] = useState(contractor.name);
@@ -270,7 +453,10 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
             <div onClick={() => setEditingRate(true)} style={{ color: C.muted, fontSize: 13, marginTop: 6, cursor: "text", borderBottom: `1px dashed ${C.border}`, display: "inline-block" }} title="Click to edit rate">{$$(contractor.rate)}/hr</div>
           )}
         </div>
-        <button onClick={() => setShowDeleteContractor(true)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 14px", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete Contractor</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Btn onClick={() => setShowContractorLog(true)} style={{ padding: "8px 16px", fontSize: 13 }}>+ Log Hours</Btn>
+          <button onClick={() => setShowDeleteContractor(true)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 14px", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete</button>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
@@ -340,6 +526,59 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <Btn v="ghost" onClick={() => setShowDeleteContractor(false)}>Cancel</Btn>
             <Btn v="danger" onClick={() => { onDeleteContractor(contractor.id); onBack(); }}>Yes, Delete</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Log hours for this contractor */}
+      {showContractorLog && (
+        <Modal title={`Log Hours — ${contractor.name}`} onClose={() => setShowContractorLog(false)}>
+          <Sel label="Property" value={cLogForm.propertyId} onChange={(e) => setCLogForm({ ...cLogForm, propertyId: e.target.value })}>
+            <option value="">Select property...</option>
+            {properties.map((p) => <option key={p.id} value={p.id}>{p.address}</option>)}
+          </Sel>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setCLogForm({ ...cLogForm, useTime: false })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${!cLogForm.useTime ? C.accent : C.border}`, background: !cLogForm.useTime ? C.accentGlow : "transparent", color: !cLogForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Manual Hours</button>
+              <button onClick={() => setCLogForm({ ...cLogForm, useTime: true })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${cLogForm.useTime ? C.accent : C.border}`, background: cLogForm.useTime ? C.accentGlow : "transparent", color: cLogForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Start / End Time</button>
+            </div>
+            {!cLogForm.useTime ? (
+              <Field label="Hours Worked" type="number" placeholder="8.5" value={cLogForm.hours} onChange={(e) => setCLogForm({ ...cLogForm, hours: e.target.value })} />
+            ) : (
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}><Field label="Start Time" type="time" value={cLogForm.startTime} onChange={(e) => setCLogForm({ ...cLogForm, startTime: e.target.value })} /></div>
+                <div style={{ flex: 1 }}><Field label="End Time" type="time" value={cLogForm.endTime} onChange={(e) => setCLogForm({ ...cLogForm, endTime: e.target.value })} /></div>
+              </div>
+            )}
+            {cLogForm.useTime && cLogForm.startTime && cLogForm.endTime && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: C.sub, marginTop: -8, marginBottom: 16 }}>
+                ⏱️ Calculated: <strong style={{ color: C.text }}>{calcHours(cLogForm.startTime, cLogForm.endTime).toFixed(1)} hours</strong>
+              </div>
+            )}
+          </div>
+          <Field label="Date" type="date" value={cLogForm.date} onChange={(e) => setCLogForm({ ...cLogForm, date: e.target.value })} />
+          <Field label="Note (optional)" placeholder="e.g. Framing + demo" value={cLogForm.note} onChange={(e) => setCLogForm({ ...cLogForm, note: e.target.value })} />
+          {(() => {
+            const h = cLogForm.useTime ? calcHours(cLogForm.startTime, cLogForm.endTime) : parseFloat(cLogForm.hours || "0");
+            const amt = h * contractor.rate;
+            return h > 0 ? (
+              <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}33`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
+                💰 This logs <strong>{$$(amt)}</strong> owed to {contractor.name}
+              </div>
+            ) : null;
+          })()}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setShowContractorLog(false)}>Cancel</Btn>
+            <Btn onClick={async () => {
+              if (!cLogForm.propertyId || !cLogForm.date) return;
+              const h = cLogForm.useTime ? calcHours(cLogForm.startTime, cLogForm.endTime) : parseFloat(cLogForm.hours);
+              if (!h || h <= 0) return;
+              const { data, error } = await supabase.from("logs").insert({ contractor_id: contractor.id, property_id: cLogForm.propertyId, hours: h, date: cLogForm.date, note: cLogForm.note || "", paid: false, deductions: "[]" }).select().single();
+              if (error) { alert("Error: " + error.message); return; }
+              if (data) onAddLog({ ...data, deductions: [] });
+              setCLogForm({ propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
+              setShowContractorLog(false);
+            }}>Save Entry</Btn>
           </div>
         </Modal>
       )}
@@ -593,6 +832,7 @@ export default function GetPaid() {
               onUpdateLog={updateLog}
               onUpdateContractor={updateContractor}
               onDeleteContractor={deleteContractor}
+              onAddLog={(log) => setLogs(prev => [...prev, log])}
             />
           ) : (
           <div>
@@ -636,7 +876,7 @@ export default function GetPaid() {
         {/* PROPERTIES */}
         {tab === "properties" && (
           selectedProperty ? (
-            <PropertyDetail property={selectedProperty} logs={logs} contractors={contractors} onBack={() => setSelectedProperty(null)} onTogglePaid={togglePaid} onDeleteLog={deleteLog} />
+            <PropertyDetail property={selectedProperty} logs={logs} contractors={contractors} onBack={() => setSelectedProperty(null)} onTogglePaid={togglePaid} onDeleteLog={deleteLog} onUpdateLog={updateLog} />
           ) : (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
