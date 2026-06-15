@@ -33,7 +33,8 @@ function calcHours(start: string, end: string): number {
 
 interface Contractor { id: string; name: string; rate: number; color: string; }
 interface Property { id: string; address: string; city: string; }
-interface Log { id: string; contractor_id: string; property_id: string; hours: number; date: string; paid: boolean; note: string; }
+interface Deduction { title: string; amount: number; }
+interface Log { id: string; contractor_id: string; property_id: string; hours: number; date: string; paid: boolean; note: string; deductions: Deduction[]; }
 
 const COLORS = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#14b8a6"];
 
@@ -153,7 +154,11 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
                   {log.note && <div style={{ color: C.sub, fontSize: 12, marginTop: 2, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
                 </div>
                 <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(amount)}</div>
+                <div style={{ textAlign: "right" }}>
+                  {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(amount)}</div>}
+                  <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0)))}</div>
+                  {(log.deductions || []).map((d: any, i: number) => <div key={i} style={{ fontSize: 11, color: C.red }}>-{d.title} {$$(Number(d.amount))}</div>)}
+                </div>
                 <Btn v={log.paid ? "ghost" : "success"} onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 14px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
                 <button onClick={() => onDeleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
               </div>
@@ -220,9 +225,12 @@ export default function GetPaid() {
     if (!lForm.contractorId || !lForm.propertyId || !lForm.date) return;
     const h = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours);
     if (!h || h <= 0) return;
-    const { data } = await supabase.from("logs").insert({ contractor_id: lForm.contractorId, property_id: lForm.propertyId, hours: h, date: lForm.date, note: lForm.note, paid: false }).select().single();
-    if (data) setLogs([...logs, data]);
+    const parsedDeductions = deductions.map(d => ({ title: d.title, amount: parseFloat(d.amount) || 0 }));
+    const { data } = await supabase.from("logs").insert({ contractor_id: lForm.contractorId, property_id: lForm.propertyId, hours: h, date: lForm.date, note: lForm.note, paid: false, deductions: parsedDeductions }).select().single();
+    if (data) setLogs([...logs, { ...data, deductions: parsedDeductions }]);
     setLForm({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
+    setDeductions([]);
+    setDedForm({ title: "", amount: "" });
     setShowLog(false);
   };
 
@@ -270,13 +278,15 @@ export default function GetPaid() {
 
   const pSummary = properties.map((p) => {
     const pl = logs.filter((l) => l.property_id === p.id);
-    const owed = pl.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? Number(l.hours) * c.rate : 0); }, 0);
-    const paid = pl.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? Number(l.hours) * c.rate : 0); }, 0);
+    const netAmount = (l: any, c: any) => { const gross = Number(l.hours) * c.rate; const ded = (l.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0); return Math.max(0, gross - ded); };
+    const owed = pl.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? netAmount(l, c) : 0); }, 0);
+    const paid = pl.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? netAmount(l, c) : 0); }, 0);
     return { ...p, owed, paid, hours: pl.reduce((s, l) => s + Number(l.hours), 0), count: pl.length };
   });
 
-  const logPreviewAmount = lForm.contractorId && computedHours > 0
-    ? (contractors.find((c) => c.id === lForm.contractorId)?.rate || 0) * computedHours : 0;
+  const totalDedAmount = deductions.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+  const grossPreview = lForm.contractorId && computedHours > 0 ? (contractors.find((c) => c.id === lForm.contractorId)?.rate || 0) * computedHours : 0;
+  const logPreviewAmount = Math.max(0, grossPreview - totalDedAmount);
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", icon: "⚡" },
@@ -485,7 +495,10 @@ export default function GetPaid() {
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
                     <div style={{ color: C.muted, fontSize: 12 }}>{log.date}</div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(amount)}</div>
+                    <div style={{ textAlign: "right" }}>
+                      {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(amount)}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0)))}</div>
+                    </div>
                     <Btn v={log.paid ? "ghost" : "success"} onClick={() => togglePaid(log.id)} style={{ padding: "6px 12px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
                     <button onClick={() => deleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
                   </div>
@@ -551,11 +564,47 @@ export default function GetPaid() {
           </div>
           <Field label="Date" type="date" value={lForm.date} onChange={(e) => setLForm({ ...lForm, date: e.target.value })} />
           <Field label="Note (optional)" placeholder="e.g. Framing + demo" value={lForm.note} onChange={(e) => setLForm({ ...lForm, note: e.target.value })} />
-          {logPreviewAmount > 0 && (
-            <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}33`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
-              💰 This logs <strong>{$$(logPreviewAmount)}</strong> owed
+
+          {/* Deductions */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Deductions (optional)</div>
+            {deductions.map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 13, color: C.text }}>{d.title}</span>
+                <span style={{ color: C.red, fontWeight: 700, fontSize: 13 }}>-{$$(parseFloat(d.amount) || 0)}</span>
+                <button onClick={() => setDeductions(deductions.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input placeholder="Item (e.g. Materials)" value={dedForm.title} onChange={(e) => setDedForm({ ...dedForm, title: e.target.value })}
+                style={{ flex: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <input placeholder="$0.00" type="number" value={dedForm.amount} onChange={(e) => setDedForm({ ...dedForm, amount: e.target.value })}
+                style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <button onClick={() => { if (!dedForm.title || !dedForm.amount) return; setDeductions([...deductions, dedForm]); setDedForm({ title: "", amount: "" }); }}
+                style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 14px", color: C.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add</button>
+            </div>
+          </div>
+
+          {/* Summary */}
+          {grossPreview > 0 && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.sub, marginBottom: 6 }}>
+                <span>Gross ({computedHours.toFixed(1)}h)</span>
+                <span>{$$(grossPreview)}</span>
+              </div>
+              {deductions.map((d, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.red, marginBottom: 4 }}>
+                  <span>- {d.title}</span>
+                  <span>-{$$(parseFloat(d.amount) || 0)}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 15 }}>
+                <span style={{ color: C.text }}>Net Owed</span>
+                <span style={{ color: C.green }}>{$$(logPreviewAmount)}</span>
+              </div>
             </div>
           )}
+
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <Btn v="ghost" onClick={() => setShowLog(false)}>Cancel</Btn>
             <Btn onClick={saveLog}>Save Entry</Btn>
