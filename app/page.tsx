@@ -195,16 +195,19 @@ export default function GetPaid() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [{ data: c }, { data: p }, { data: l }] = await Promise.all([
+      const [{ data: c, error: ce }, { data: p, error: pe }, { data: l, error: le }] = await Promise.all([
         supabase.from("contractors").select("*").order("created_at"),
         supabase.from("properties").select("*").order("created_at"),
-        supabase.from("logs").select("*").order("created_at"),
+        supabase.from("logs").select("*").order("date", { ascending: false }),
       ]);
+      if (ce) console.error("contractors error:", ce);
+      if (pe) console.error("properties error:", pe);
+      if (le) console.error("logs error:", le);
       setContractors(c || []);
       setProperties(p || []);
       setLogs((l || []).map((log: Log) => ({
         ...log,
-        deductions: typeof log.deductions === "string" ? JSON.parse(log.deductions || "[]") : (log.deductions || []),
+        deductions: Array.isArray(log.deductions) ? log.deductions : (typeof log.deductions === "string" ? JSON.parse(log.deductions || "[]") : []),
       })));
       setLoading(false);
     }
