@@ -27,7 +27,7 @@ const formatCurrency = (n) =>
 const formatHours = (h) => `${h.toFixed(1)}h`;
 
 // ─── Pill ──────────────────────────────────────────────────────────────────
-function Pill({ color, glow, children }) {
+function Pill({ color, children }) {
   return (
     <span
       style={{
@@ -187,7 +187,7 @@ function Btn({ children, onClick, variant = "primary", style = {} }) {
 }
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────
-function StatCard({ label, value, color, glow, icon }) {
+function StatCard({ label, value, color, icon }) {
   return (
     <div
       style={{
@@ -597,7 +597,7 @@ export default function GetPaid() {
                     <div style={{ flex: 1, minWidth: 140 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{c?.name || "Unknown"}</div>
                       <div style={{ color: COLORS.textMuted, fontSize: 12, marginTop: 2 }}>{p?.address || "Unknown property"}</div>
-                      {log.note && <div style={{ color: COLORS.textSub, fontSize: 12, marginTop: 4, fontStyle: "italic" }}>"{log.note}"</div>}
+                      {log.note && <div style={{ color: COLORS.textSub, fontSize: 12, marginTop: 4, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
                     </div>
                     <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
                       <div>
