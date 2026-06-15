@@ -156,8 +156,8 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
                 <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
                 <div style={{ textAlign: "right" }}>
                   {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(amount)}</div>}
-                  <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0)))}</div>
-                  {(log.deductions || []).map((d: any, i: number) => <div key={i} style={{ fontSize: 11, color: C.red }}>-{d.title} {$$(Number(d.amount))}</div>)}
+                  <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0)))}</div>
+                  {(log.deductions || []).map((d: Deduction, i: number) => <div key={i} style={{ fontSize: 11, color: C.red }}>-{d.title} {$$(Number(d.amount))}</div>)}
                 </div>
                 <Btn v={log.paid ? "ghost" : "success"} onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 14px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
                 <button onClick={() => onDeleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
@@ -200,7 +200,7 @@ export default function GetPaid() {
       ]);
       setContractors(c || []);
       setProperties(p || []);
-      setLogs((l || []).map((log: any) => ({
+      setLogs((l || []).map((log: Log) => ({
         ...log,
         deductions: typeof log.deductions === "string" ? JSON.parse(log.deductions || "[]") : (log.deductions || []),
       })));
@@ -291,7 +291,7 @@ export default function GetPaid() {
 
   const pSummary = properties.map((p) => {
     const pl = logs.filter((l) => l.property_id === p.id);
-    const netAmount = (l: any, c: any) => { const gross = Number(l.hours) * c.rate; const ded = (l.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0); return Math.max(0, gross - ded); };
+    const netAmount = (l: Log, c: Contractor) => { const gross = Number(l.hours) * c.rate; const ded = (l.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0); return Math.max(0, gross - ded); };
     const owed = pl.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? netAmount(l, c) : 0); }, 0);
     const paid = pl.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? netAmount(l, c) : 0); }, 0);
     return { ...p, owed, paid, hours: pl.reduce((s, l) => s + Number(l.hours), 0), count: pl.length };
@@ -510,7 +510,7 @@ export default function GetPaid() {
                     <div style={{ color: C.muted, fontSize: 12 }}>{log.date}</div>
                     <div style={{ textAlign: "right" }}>
                       {(log.deductions || []).length > 0 && <div style={{ color: C.muted, fontSize: 11, textDecoration: "line-through" }}>{$$(amount)}</div>}
-                      <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: any) => s + Number(d.amount), 0)))}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(Math.max(0, amount - (log.deductions || []).reduce((s: number, d: Deduction) => s + Number(d.amount), 0)))}</div>
                     </div>
                     <Btn v={log.paid ? "ghost" : "success"} onClick={() => togglePaid(log.id)} style={{ padding: "6px 12px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
                     <button onClick={() => deleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
