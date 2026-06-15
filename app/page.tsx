@@ -991,7 +991,13 @@ export default function GetPaid() {
                             <span onClick={(e) => e.stopPropagation()}><InlineEdit value={p.city} onSave={(v) => updateProperty(p.id, "city", v)} /></span>
                           </div>
                           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                            {assigned.map((c) => <span key={c.id} style={{ background: c.color + "22", color: c.color, border: `1px solid ${c.color}44`, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{c.name.split(" ")[0]}</span>)}
+                            {assigned.map((c) => {
+                            const cLogs = logs.filter(l => l.property_id === p.id && l.contractor_id === c.id);
+                            const allPaid = cLogs.length > 0 && cLogs.every(l => l.paid);
+                            return (
+                              <span key={c.id} style={{ background: allPaid ? "transparent" : c.color + "22", color: allPaid ? C.muted : c.color, border: `1px solid ${allPaid ? C.border : c.color + "44"}`, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700, opacity: allPaid ? 0.5 : 1, textDecoration: allPaid ? "line-through" : "none" }} title={allPaid ? "All paid" : undefined}>{c.name.split(" ")[0]}</span>
+                            );
+                          })}
                             {assigned.length === 0 && <span style={{ color: C.muted, fontSize: 12 }}>No crew assigned yet</span>}
                           </div>
                         </div>
