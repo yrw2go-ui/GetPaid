@@ -552,13 +552,9 @@ export default function GetPaid() {
                     onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.accent + "66")}
                     onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}>
                     <div style={{ width: 46, height: 46, borderRadius: 14, background: con.color + "22", border: `2px solid ${con.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: con.color, fontWeight: 800, fontSize: 15 }}>{initials(con.name)}</div>
-                    <div style={{ flex: 1, minWidth: 150 }} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>
-                        <InlineEdit value={con.name} onSave={(v) => updateContractor(con.id, "name", v)} />
-                      </div>
-                      <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
-                        $<InlineEdit value={con.rate.toString()} onSave={(v) => updateContractor(con.id, "rate", parseFloat(v) || con.rate)} style={{ width: 50 }} /> / hour
-                      </div>
+                    <div style={{ flex: 1, minWidth: 150 }}>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{con.name}</div>
+                      <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>{$$(con.rate)} / hour</div>
                     </div>
                     <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                       <div style={{ textAlign: "center" }}><div style={{ fontWeight: 700 }}>{hrs(s.hours)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Hours</div></div>
