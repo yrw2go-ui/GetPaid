@@ -1,27 +1,23 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://rytoiilokjxelabqaljq.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5dG9paWxva2p4ZWxhYnFhbGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1Mjg2MTQsImV4cCI6MjA5NzEwNDYxNH0.LbJz7YLWi_kX6Gw93lvayPKcaXkGiPUusQ3d-zPQ8Kk"
+);
 
 const C = {
-  bg: "#0a0a0f",
-  surface: "#13131a",
-  card: "#1a1a24",
-  border: "#2a2a3a",
-  accent: "#7c3aed",
-  accentLight: "#a78bfa",
-  accentGlow: "rgba(124,58,237,0.15)",
-  green: "#10b981",
-  greenGlow: "rgba(16,185,129,0.15)",
-  yellow: "#f59e0b",
-  yellowGlow: "rgba(245,158,11,0.15)",
-  red: "#ef4444",
-  redGlow: "rgba(239,68,68,0.15)",
-  text: "#f1f1f3",
-  muted: "#6b7280",
-  sub: "#9ca3af",
+  bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
+  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
+  yellow: "#f59e0b", yellowGlow: "rgba(245,158,11,0.15)",
+  red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
+  text: "#f1f1f3", muted: "#6b7280", sub: "#9ca3af",
 };
 
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-const hrs = (h: number) => `${h.toFixed(1)}h`;
+const hrs = (h: number) => `${Number(h).toFixed(1)}h`;
 const initials = (name: string) => name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
 function timeToDecimal(t: string): number {
@@ -35,13 +31,11 @@ function calcHours(start: string, end: string): number {
   return Math.round(diff * 10) / 10;
 }
 
-interface Contractor { id: number; name: string; rate: number; color: string; }
-interface Property { id: number; address: string; city: string; }
-interface Log { id: number; contractorId: number; propertyId: number; hours: number; date: string; paid: boolean; note: string; }
+interface Contractor { id: string; name: string; rate: number; color: string; }
+interface Property { id: string; address: string; city: string; }
+interface Log { id: string; contractor_id: string; property_id: string; hours: number; date: string; paid: boolean; note: string; }
 
 const COLORS = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#14b8a6"];
-
-// ── Components ────────────────────────────────────────────────────────────
 
 function Pill({ color, glow, children }: { color: string; glow: string; children: React.ReactNode }) {
   return <span style={{ background: glow, color, border: `1px solid ${color}44`, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>{children}</span>;
@@ -89,9 +83,9 @@ function Btn({ children, onClick, v = "primary", style = {} }: { children: React
 function InlineEdit({ value, onSave, style = {} }: { value: string; onSave: (v: string) => void; style?: React.CSSProperties }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value);
+  useEffect(() => setVal(value), [value]);
   if (editing) return (
-    <input autoFocus value={val}
-      onChange={(e) => setVal(e.target.value)}
+    <input autoFocus value={val} onChange={(e) => setVal(e.target.value)}
       onBlur={() => { onSave(val); setEditing(false); }}
       onKeyDown={(e) => { if (e.key === "Enter") { onSave(val); setEditing(false); } if (e.key === "Escape") { setVal(value); setEditing(false); } }}
       style={{ background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 6, padding: "2px 8px", color: C.text, fontSize: "inherit", fontWeight: "inherit", outline: "none", ...style }} />
@@ -110,81 +104,56 @@ function StatCard({ label, value, color, icon }: { label: string; value: string 
   );
 }
 
-// ── Property Detail View ─────────────────────────────────────────────────
-
 function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onDeleteLog }: {
   property: Property; logs: Log[]; contractors: Contractor[];
-  onBack: () => void; onTogglePaid: (id: number) => void; onDeleteLog: (id: number) => void;
+  onBack: () => void; onTogglePaid: (id: string) => void; onDeleteLog: (id: string) => void;
 }) {
-  const pLogs = logs.filter((l) => l.propertyId === property.id);
-  const totalOwed = pLogs.filter((l) => !l.paid).reduce((sum, l) => {
-    const con = contractors.find((c) => c.id === l.contractorId);
-    return sum + (con ? con.rate * l.hours : 0);
-  }, 0);
-  const totalPaid = pLogs.filter((l) => l.paid).reduce((sum, l) => {
-    const con = contractors.find((c) => c.id === l.contractorId);
-    return sum + (con ? con.rate * l.hours : 0);
-  }, 0);
-  const totalHrs = pLogs.reduce((sum, l) => sum + l.hours, 0);
+  const pLogs = logs.filter((l) => l.property_id === property.id);
+  const totalOwed = pLogs.filter((l) => !l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? con.rate * l.hours : 0); }, 0);
+  const totalPaid = pLogs.filter((l) => l.paid).reduce((sum, l) => { const con = contractors.find((c) => c.id === l.contractor_id); return sum + (con ? con.rate * l.hours : 0); }, 0);
+  const totalHrs = pLogs.reduce((sum, l) => sum + Number(l.hours), 0);
 
-  // Group by contractor
   const byContractor = contractors.map((con) => {
-    const cLogs = pLogs.filter((l) => l.contractorId === con.id);
+    const cLogs = pLogs.filter((l) => l.contractor_id === con.id);
     if (cLogs.length === 0) return null;
-    const owed = cLogs.filter((l) => !l.paid).reduce((s, l) => s + l.hours * con.rate, 0);
-    const paid = cLogs.filter((l) => l.paid).reduce((s, l) => s + l.hours * con.rate, 0);
-    const hours = cLogs.reduce((s, l) => s + l.hours, 0);
+    const owed = cLogs.filter((l) => !l.paid).reduce((s, l) => s + Number(l.hours) * con.rate, 0);
+    const paid = cLogs.filter((l) => l.paid).reduce((s, l) => s + Number(l.hours) * con.rate, 0);
+    const hours = cLogs.reduce((s, l) => s + Number(l.hours), 0);
     return { con, cLogs, owed, paid, hours };
   }).filter(Boolean) as { con: Contractor; cLogs: Log[]; owed: number; paid: number; hours: number }[];
 
   return (
     <div>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>
-        ← Back to Properties
-      </button>
-      <div style={{ marginBottom: 8 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{property.address}</h1>
-        <p style={{ color: C.muted, margin: "4px 0 0", fontSize: 14 }}>{property.city}</p>
-      </div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32, marginTop: 24 }}>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24, display: "flex", alignItems: "center", gap: 6 }}>← Back to Properties</button>
+      <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{property.address}</h1>
+      <p style={{ color: C.muted, margin: "4px 0 24px", fontSize: 14 }}>{property.city}</p>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
         <StatCard label="Total Owed" value={$$(totalOwed)} color={C.red} icon="🔴" />
         <StatCard label="Total Paid" value={$$(totalPaid)} color={C.green} icon="✅" />
         <StatCard label="Hours Logged" value={hrs(totalHrs)} color={C.yellow} icon="⏱️" />
         <StatCard label="Entries" value={pLogs.length} color={C.accentLight} icon="📋" />
       </div>
-
-      {byContractor.length === 0 && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div>
-          <div style={{ fontWeight: 600 }}>No hours logged for this property yet</div>
-        </div>
-      )}
-
+      {byContractor.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}><div style={{ fontSize: 40, marginBottom: 12 }}>🏠</div><div style={{ fontWeight: 600 }}>No hours logged for this property yet</div></div>}
       {byContractor.map(({ con, cLogs, owed, paid, hours }) => (
         <div key={con.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 16, overflow: "hidden" }}>
-          {/* Contractor header */}
           <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: con.color + "22", border: `2px solid ${con.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: con.color, fontWeight: 800, fontSize: 14 }}>{initials(con.name)}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{con.name}</div>
-              <div style={{ color: C.muted, fontSize: 12 }}>{$$(con.rate)}/hr &middot; {hrs(hours)} total</div>
-            </div>
+            <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 15 }}>{con.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{$$(con.rate)}/hr &middot; {hrs(hours)} total</div></div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              {owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 16 }}>{$$(owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Owed</div></div>}
-              {paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 16 }}>{$$(paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Paid</div></div>}
+              {owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 16 }}>{$$(owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Owed</div></div>}
+              {paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 16 }}>{$$(paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Paid</div></div>}
             </div>
           </div>
-          {/* Log rows */}
           {[...cLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => {
-            const amount = con.rate * log.hours;
+            const amount = con.rate * Number(log.hours);
             return (
               <div key={log.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: log.paid ? `${C.green}08` : "transparent" }}>
                 <div style={{ flex: 1, minWidth: 120 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{log.date}</div>
                   {log.note && <div style={{ color: C.sub, fontSize: 12, marginTop: 2, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
                 </div>
-                <div style={{ color: C.text, fontWeight: 700, fontSize: 13, minWidth: 40 }}>{hrs(log.hours)}</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow, minWidth: 70 }}>{$$(amount)}</div>
+                <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(amount)}</div>
                 <Btn v={log.paid ? "ghost" : "success"} onClick={() => onTogglePaid(log.id)} style={{ padding: "6px 14px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
                 <button onClick={() => onDeleteLog(log.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 4 }}>🗑️</button>
               </div>
@@ -196,26 +165,14 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
   );
 }
 
-// ── Main App ─────────────────────────────────────────────────────────────
-
 export default function GetPaid() {
   const [tab, setTab] = useState("dashboard");
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [contractors, setContractors] = useState<Contractor[]>([
-    { id: 1, name: "Marcus Webb", rate: 45, color: "#7c3aed" },
-    { id: 2, name: "Layla Torres", rate: 38, color: "#10b981" },
-    { id: 3, name: "Devon Park", rate: 52, color: "#f59e0b" },
-  ]);
-  const [properties, setProperties] = useState<Property[]>([
-    { id: 1, address: "2847 Elmwood Ave", city: "Chicago, IL" },
-    { id: 2, address: "501 Raven Court", city: "Oak Park, IL" },
-  ]);
-  const [logs, setLogs] = useState<Log[]>([
-    { id: 1, contractorId: 1, propertyId: 1, hours: 8, date: "2025-06-10", paid: false, note: "Demo & framing" },
-    { id: 2, contractorId: 2, propertyId: 1, hours: 6, date: "2025-06-11", paid: false, note: "Electrical rough-in" },
-    { id: 3, contractorId: 3, propertyId: 2, hours: 10, date: "2025-06-09", paid: true, note: "Full kitchen tile" },
-  ]);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
 
   const [showAddC, setShowAddC] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
@@ -225,54 +182,101 @@ export default function GetPaid() {
   const [pForm, setPForm] = useState({ address: "", city: "" });
   const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
 
-  // Computed hours from time range
   const computedHours = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours || "0");
 
-  const addContractor = () => {
+  // ── Load data ──
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const [{ data: c }, { data: p }, { data: l }] = await Promise.all([
+        supabase.from("contractors").select("*").order("created_at"),
+        supabase.from("properties").select("*").order("created_at"),
+        supabase.from("logs").select("*").order("created_at"),
+      ]);
+      setContractors(c || []);
+      setProperties(p || []);
+      setLogs(l || []);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // ── CRUD ──
+  const addContractor = async () => {
     if (!cForm.name || !cForm.rate) return;
-    setContractors([...contractors, { id: Date.now(), name: cForm.name, rate: parseFloat(cForm.rate), color: COLORS[contractors.length % COLORS.length] }]);
+    const { data } = await supabase.from("contractors").insert({ name: cForm.name, rate: parseFloat(cForm.rate), color: COLORS[contractors.length % COLORS.length] }).select().single();
+    if (data) setContractors([...contractors, data]);
     setCForm({ name: "", rate: "" }); setShowAddC(false);
   };
 
-  const addProperty = () => {
+  const addProperty = async () => {
     if (!pForm.address) return;
-    setProperties([...properties, { id: Date.now(), address: pForm.address, city: pForm.city }]);
+    const { data } = await supabase.from("properties").insert({ address: pForm.address, city: pForm.city }).select().single();
+    if (data) setProperties([...properties, data]);
     setPForm({ address: "", city: "" }); setShowAddP(false);
   };
 
-  const saveLog = () => {
+  const saveLog = async () => {
     if (!lForm.contractorId || !lForm.propertyId || !lForm.date) return;
     const h = lForm.useTime ? calcHours(lForm.startTime, lForm.endTime) : parseFloat(lForm.hours);
     if (!h || h <= 0) return;
-    setLogs([...logs, { id: Date.now(), contractorId: parseInt(lForm.contractorId), propertyId: parseInt(lForm.propertyId), hours: h, date: lForm.date, note: lForm.note, paid: false }]);
+    const { data } = await supabase.from("logs").insert({ contractor_id: lForm.contractorId, property_id: lForm.propertyId, hours: h, date: lForm.date, note: lForm.note, paid: false }).select().single();
+    if (data) setLogs([...logs, data]);
     setLForm({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: new Date().toISOString().split("T")[0], note: "", useTime: false });
     setShowLog(false);
   };
 
-  const togglePaid = (id: number) => setLogs(logs.map((l) => l.id === id ? { ...l, paid: !l.paid } : l));
-  const deleteLog = (id: number) => setLogs(logs.filter((l) => l.id !== id));
+  const togglePaid = async (id: string) => {
+    const log = logs.find((l) => l.id === id);
+    if (!log) return;
+    await supabase.from("logs").update({ paid: !log.paid }).eq("id", id);
+    setLogs(logs.map((l) => l.id === id ? { ...l, paid: !l.paid } : l));
+  };
 
-  const updateContractor = (id: number, field: keyof Contractor, value: string | number) =>
+  const deleteLog = async (id: string) => {
+    await supabase.from("logs").delete().eq("id", id);
+    setLogs(logs.filter((l) => l.id !== id));
+  };
+
+  const updateContractor = async (id: string, field: string, value: string | number) => {
+    await supabase.from("contractors").update({ [field]: value }).eq("id", id);
     setContractors(contractors.map((c) => c.id === id ? { ...c, [field]: value } : c));
-  const updateProperty = (id: number, field: keyof Property, value: string) =>
-    setProperties(properties.map((p) => p.id === id ? { ...p, [field]: value } : p));
+  };
 
-  // Summaries
-  const totalOwed = logs.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractorId); return s + (c ? c.rate * l.hours : 0); }, 0);
-  const totalPaid = logs.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractorId); return s + (c ? c.rate * l.hours : 0); }, 0);
-  const totalHours = logs.reduce((s, l) => s + l.hours, 0);
+  const updateProperty = async (id: string, field: string, value: string) => {
+    await supabase.from("properties").update({ [field]: value }).eq("id", id);
+    setProperties(properties.map((p) => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const deleteContractor = async (id: string) => {
+    await supabase.from("contractors").delete().eq("id", id);
+    setContractors(contractors.filter((c) => c.id !== id));
+  };
+
+  const deleteProperty = async (id: string) => {
+    await supabase.from("properties").delete().eq("id", id);
+    setProperties(properties.filter((p) => p.id !== id));
+  };
+
+  // ── Summaries ──
+  const totalOwed = logs.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? c.rate * Number(l.hours) : 0); }, 0);
+  const totalPaid = logs.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? c.rate * Number(l.hours) : 0); }, 0);
+  const totalHours = logs.reduce((s, l) => s + Number(l.hours), 0);
 
   const cSummary = contractors.map((c) => {
-    const cl = logs.filter((l) => l.contractorId === c.id);
-    return { ...c, owed: cl.filter((l) => !l.paid).reduce((s, l) => s + l.hours * c.rate, 0), paid: cl.filter((l) => l.paid).reduce((s, l) => s + l.hours * c.rate, 0), hours: cl.reduce((s, l) => s + l.hours, 0), count: cl.length };
+    const cl = logs.filter((l) => l.contractor_id === c.id);
+    return { ...c, owed: cl.filter((l) => !l.paid).reduce((s, l) => s + Number(l.hours) * c.rate, 0), paid: cl.filter((l) => l.paid).reduce((s, l) => s + Number(l.hours) * c.rate, 0), hours: cl.reduce((s, l) => s + Number(l.hours), 0), count: cl.length };
   });
 
   const pSummary = properties.map((p) => {
-    const pl = logs.filter((l) => l.propertyId === p.id);
-    const owed = pl.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractorId); return s + (c ? l.hours * c.rate : 0); }, 0);
-    const paid = pl.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractorId); return s + (c ? l.hours * c.rate : 0); }, 0);
-    return { ...p, owed, paid, hours: pl.reduce((s, l) => s + l.hours, 0), count: pl.length };
+    const pl = logs.filter((l) => l.property_id === p.id);
+    const owed = pl.filter((l) => !l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? Number(l.hours) * c.rate : 0); }, 0);
+    const paid = pl.filter((l) => l.paid).reduce((s, l) => { const c = contractors.find((c) => c.id === l.contractor_id); return s + (c ? Number(l.hours) * c.rate : 0); }, 0);
+    return { ...p, owed, paid, hours: pl.reduce((s, l) => s + Number(l.hours), 0), count: pl.length };
   });
+
+  const logPreviewAmount = lForm.contractorId && computedHours > 0
+    ? (contractors.find((c) => c.id === lForm.contractorId)?.rate || 0) * computedHours : 0;
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", icon: "⚡" },
@@ -281,13 +285,15 @@ export default function GetPaid() {
     { id: "logs", label: "Hours", icon: "🕐" },
   ];
 
-  const logPreviewAmount = lForm.contractorId && computedHours > 0
-    ? (contractors.find((c) => c.id === parseInt(lForm.contractorId))?.rate || 0) * computedHours
-    : 0;
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+      <div style={{ fontSize: 40 }}>💸</div>
+      <div style={{ color: C.muted, fontSize: 14, fontWeight: 600 }}>Loading GetPaid...</div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', -apple-system, sans-serif", color: C.text }}>
-      {/* Nav */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -307,7 +313,7 @@ export default function GetPaid() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px" }}>
 
-        {/* ── DASHBOARD ── */}
+        {/* DASHBOARD */}
         {tab === "dashboard" && (
           <div>
             <div style={{ marginBottom: 28 }}>
@@ -336,6 +342,7 @@ export default function GetPaid() {
                   </div>
                 </div>
               ))}
+              {contractors.length === 0 && <div style={{ color: C.muted, fontSize: 14, padding: "20px 0" }}>No crew members yet. Add one in the Crew tab.</div>}
             </div>
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 14, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Properties</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -353,11 +360,12 @@ export default function GetPaid() {
                   </div>
                 </div>
               ))}
+              {properties.length === 0 && <div style={{ color: C.muted, fontSize: 14, padding: "20px 0" }}>No properties yet. Add one in the Properties tab.</div>}
             </div>
           </div>
         )}
 
-        {/* ── CONTRACTORS ── */}
+        {/* CONTRACTORS */}
         {tab === "contractors" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
@@ -386,7 +394,7 @@ export default function GetPaid() {
                       <div style={{ textAlign: "center" }}><div style={{ color: C.red, fontWeight: 700 }}>{$$(s.owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Owed</div></div>
                       <div style={{ textAlign: "center" }}><div style={{ color: C.green, fontWeight: 700 }}>{$$(s.paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>Paid</div></div>
                     </div>
-                    <button onClick={() => setContractors(contractors.filter((x) => x.id !== con.id))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 4 }}>🗑️</button>
+                    <button onClick={() => deleteContractor(con.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 4 }}>🗑️</button>
                   </div>
                 );
               })}
@@ -394,7 +402,7 @@ export default function GetPaid() {
           </div>
         )}
 
-        {/* ── PROPERTIES ── */}
+        {/* PROPERTIES */}
         {tab === "properties" && (
           selectedProperty ? (
             <PropertyDetail property={selectedProperty} logs={logs} contractors={contractors} onBack={() => setSelectedProperty(null)} onTogglePaid={togglePaid} onDeleteLog={deleteLog} />
@@ -409,7 +417,7 @@ export default function GetPaid() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {pSummary.map((p) => {
-                  const assigned = [...new Set(logs.filter((l) => l.propertyId === p.id).map((l) => l.contractorId))].map((id) => contractors.find((c) => c.id === id)).filter((c): c is Contractor => !!c);
+                  const assigned = [...new Set(logs.filter((l) => l.property_id === p.id).map((l) => l.contractor_id))].map((id) => contractors.find((c) => c.id === id)).filter((c): c is Contractor => !!c);
                   return (
                     <div key={p.id} onClick={() => setSelectedProperty(p)}
                       style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", cursor: "pointer", transition: "border-color 0.15s" }}
@@ -419,14 +427,10 @@ export default function GetPaid() {
                         <div style={{ fontSize: 30 }}>🏠</div>
                         <div style={{ flex: 1, minWidth: 160 }}>
                           <div style={{ fontWeight: 700, fontSize: 16 }}>
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <InlineEdit value={p.address} onSave={(v) => updateProperty(p.id, "address", v)} />
-                            </span>
+                            <span onClick={(e) => e.stopPropagation()}><InlineEdit value={p.address} onSave={(v) => updateProperty(p.id, "address", v)} /></span>
                           </div>
                           <div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>
-                            <span onClick={(e) => e.stopPropagation()}>
-                              <InlineEdit value={p.city} onSave={(v) => updateProperty(p.id, "city", v)} />
-                            </span>
+                            <span onClick={(e) => e.stopPropagation()}><InlineEdit value={p.city} onSave={(v) => updateProperty(p.id, "city", v)} /></span>
                           </div>
                           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                             {assigned.map((c) => <span key={c.id} style={{ background: c.color + "22", color: c.color, border: `1px solid ${c.color}44`, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{c.name.split(" ")[0]}</span>)}
@@ -444,7 +448,7 @@ export default function GetPaid() {
                           </div>}
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <span style={{ color: C.accentLight, fontSize: 20 }}>›</span>
-                            <button onClick={(e) => { e.stopPropagation(); setProperties(properties.filter((x) => x.id !== p.id)); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0 }}>🗑️</button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteProperty(p.id); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0 }}>🗑️</button>
                           </div>
                         </div>
                       </div>
@@ -456,7 +460,7 @@ export default function GetPaid() {
           )
         )}
 
-        {/* ── HOURS LOG ── */}
+        {/* LOGS */}
         {tab === "logs" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
@@ -468,9 +472,9 @@ export default function GetPaid() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {[...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => {
-                const con = contractors.find((x) => x.id === log.contractorId);
-                const prop = properties.find((x) => x.id === log.propertyId);
-                const amount = con ? con.rate * log.hours : 0;
+                const con = contractors.find((x) => x.id === log.contractor_id);
+                const prop = properties.find((x) => x.id === log.property_id);
+                const amount = con ? con.rate * Number(log.hours) : 0;
                 return (
                   <div key={log.id} style={{ background: C.card, border: `1px solid ${log.paid ? C.green + "33" : C.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                     <div style={{ width: 34, height: 34, borderRadius: 10, background: con ? con.color + "22" : "#fff1", border: `1px solid ${con ? con.color + "44" : "#fff2"}`, display: "flex", alignItems: "center", justifyContent: "center", color: con?.color, fontWeight: 800, fontSize: 13 }}>{con ? initials(con.name) : "?"}</div>
@@ -479,7 +483,7 @@ export default function GetPaid() {
                       <div style={{ color: C.muted, fontSize: 12 }}>{prop?.address || "Unknown"}</div>
                       {log.note && <div style={{ color: C.sub, fontSize: 12, fontStyle: "italic" }}>&ldquo;{log.note}&rdquo;</div>}
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(log.hours)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{hrs(Number(log.hours))}</div>
                     <div style={{ color: C.muted, fontSize: 12 }}>{log.date}</div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: log.paid ? C.green : C.yellow }}>{$$(amount)}</div>
                     <Btn v={log.paid ? "ghost" : "success"} onClick={() => togglePaid(log.id)} style={{ padding: "6px 12px", fontSize: 12 }}>{log.paid ? "✓ Paid" : "Mark Paid"}</Btn>
@@ -493,8 +497,7 @@ export default function GetPaid() {
         )}
       </div>
 
-      {/* ── MODALS ── */}
-
+      {/* MODALS */}
       {showAddC && (
         <Modal title="Add Crew Member" onClose={() => setShowAddC(false)}>
           <Field label="Full Name" placeholder="e.g. Marcus Webb" value={cForm.name} onChange={(e) => setCForm({ ...cForm, name: e.target.value })} />
@@ -527,8 +530,6 @@ export default function GetPaid() {
             <option value="">Select property...</option>
             {properties.map((p) => <option key={p.id} value={p.id}>{p.address}</option>)}
           </Sel>
-
-          {/* Time mode toggle */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button onClick={() => setLForm({ ...lForm, useTime: false })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${!lForm.useTime ? C.accent : C.border}`, background: !lForm.useTime ? C.accentGlow : "transparent", color: !lForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Manual Hours</button>
@@ -548,10 +549,8 @@ export default function GetPaid() {
               </div>
             )}
           </div>
-
           <Field label="Date" type="date" value={lForm.date} onChange={(e) => setLForm({ ...lForm, date: e.target.value })} />
           <Field label="Note (optional)" placeholder="e.g. Framing + demo" value={lForm.note} onChange={(e) => setLForm({ ...lForm, note: e.target.value })} />
-
           {logPreviewAmount > 0 && (
             <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}33`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
               💰 This logs <strong>{$$(logPreviewAmount)}</strong> owed
