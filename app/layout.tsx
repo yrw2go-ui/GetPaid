@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
+
 export const metadata = {
   title: "GetPaid",
   description: "Track contractor hours and payments",
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
