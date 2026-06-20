@@ -37,6 +37,7 @@ const today = () => new Date().toISOString().split("T")[0];
 interface Contractor { id: string; name: string; rate: number; color: string; }
 interface Property { id: string; address: string; city: string; }
 interface Deduction { title: string; amount: number; }
+interface Advance { id: string; contractor_id: string; amount: number; date: string; note: string; }
 interface Log {
   id: string; contractor_id: string; property_id: string;
   hours: number; rate_override: number | null;
@@ -403,18 +404,23 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
 }
 
 // ─── Contractor Detail ────────────────────────────────────────────────────────
-function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onUpdateContractor, onDeleteContractor, onAddLog }: {
-  contractor: Contractor; logs: Log[]; properties: Property[];
+function ContractorDetail({ contractor, logs, properties, advances, onBack, onTogglePaid, onDeleteLog, onUpdateLog, onUpdateContractor, onDeleteContractor, onAddLog, onAddAdvance, onDeleteAdvance }: {
+  contractor: Contractor; logs: Log[]; properties: Property[]; advances: Advance[];
   onBack: () => void; onTogglePaid: (id: string) => void; onDeleteLog: (id: string) => void;
   onUpdateLog: (id: string, fields: Partial<Log>) => void;
   onUpdateContractor: (id: string, field: string, value: string | number) => void;
   onDeleteContractor: (id: string) => void;
   onAddLog: (log: Log) => void;
+  onAddAdvance: (advance: Omit<Advance, "id">) => void;
+  onDeleteAdvance: (id: string) => void;
 }) {
   const cLogs = logs.filter((l) => l.contractor_id === contractor.id);
+  const cAdvances = advances.filter(a => a.contractor_id === contractor.id);
   const owedLogs = cLogs.filter((l) => !l.paid);
   const paidLogs = cLogs.filter((l) => l.paid);
-  const totalOwed = owedLogs.reduce((s, l) => s + netAmt(l, contractor.rate), 0);
+  const grossOwed = owedLogs.reduce((s, l) => s + netAmt(l, contractor.rate), 0);
+  const totalAdvances = cAdvances.reduce((s, a) => s + Number(a.amount), 0);
+  const totalOwed = Math.max(0, grossOwed - totalAdvances);
   const totalPaid = paidLogs.reduce((s, l) => s + netAmt(l, contractor.rate), 0);
   const totalHrs = cLogs.reduce((s, l) => s + Number(l.hours), 0);
 
@@ -422,6 +428,8 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
   const [deleteLogId, setDeleteLogId] = useState<string | null>(null);
   const [showDeleteContractor, setShowDeleteContractor] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({ amount: "", date: today(), note: "" });
   const [editingName, setEditingName] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
   const [nameVal, setNameVal] = useState(contractor.name);
@@ -508,6 +516,7 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
         </div>
         <div style={{ display: "flex", gap: 8, flexDirection: "column" }}>
           <Btn onClick={() => setShowLogModal(true)} style={{ padding: "8px 16px", fontSize: 13 }}>+ Log Hours</Btn>
+          <Btn v="success" onClick={() => setShowAdvanceModal(true)} style={{ padding: "8px 16px", fontSize: 13 }}>💵 + Advance</Btn>
           <button onClick={() => setShowDeleteContractor(true)} style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 14px", color: C.red, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗑️ Delete</button>
         </div>
       </div>
@@ -516,8 +525,34 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
         <StatCard label="Total Owed" value={$$(totalOwed)} color={C.red} icon="🔴" />
         <StatCard label="Total Paid" value={$$(totalPaid)} color={C.green} icon="✅" />
         <StatCard label="Hours" value={hrs(totalHrs)} color={C.yellow} icon="⏱️" />
-        <StatCard label="Entries" value={cLogs.length} color={C.accentLight} icon="📋" />
+        {totalAdvances > 0 && <StatCard label="Advances" value={$$(totalAdvances)} color={C.accentLight} icon="💵" />}
       </div>
+
+      {/* Advances section */}
+      {cAdvances.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.accentLight, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Advances / Partial Payments — {$$(totalAdvances)} total</div>
+          <div style={{ background: C.card, border: `1px solid ${C.accentLight}33`, borderRadius: 14, overflow: "hidden" }}>
+            {[...cAdvances].sort((a, b) => b.date.localeCompare(a.date)).map((adv) => (
+              <div key={adv.id} style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}22`, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 20 }}>💵</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: C.accentLight }}>{$$(Number(adv.amount))}</div>
+                  <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{adv.date}{adv.note && ` · ${adv.note}`}</div>
+                </div>
+                <button onClick={() => { if (confirm("Delete this advance?")) onDeleteAdvance(adv.id); }}
+                  style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>🗑️</button>
+              </div>
+            ))}
+          </div>
+          {grossOwed > 0 && totalAdvances > 0 && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ color: C.sub }}>Gross owed: {$$(grossOwed)} − Advances: {$$(totalAdvances)}</span>
+              <span style={{ fontWeight: 700, color: C.red }}>Net: {$$(totalOwed)}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {owedLogs.length > 0 && (
         <div style={{ marginBottom: 24 }}>
@@ -585,6 +620,31 @@ function ContractorDetail({ contractor, logs, properties, onBack, onTogglePaid, 
       {showDeleteContractor && (
         <DeleteModal title="Delete Contractor?" message={`This will permanently delete ${contractor.name} and all their log entries. This cannot be undone.`} onConfirm={() => { onDeleteContractor(contractor.id); onBack(); }} onClose={() => setShowDeleteContractor(false)} />
       )}
+
+      {showAdvanceModal && (
+        <Modal title={`Add Advance — ${contractor.name}`} onClose={() => setShowAdvanceModal(false)}>
+          <div style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.yellow }}>
+            💵 This will reduce the net amount owed to {contractor.name} without marking any hours as paid.
+          </div>
+          <Field label="Amount ($)" type="number" placeholder="0.00" value={advanceForm.amount} onChange={(e) => setAdvanceForm({ ...advanceForm, amount: e.target.value })} />
+          <Field label="Date" type="date" value={advanceForm.date} onChange={(e) => setAdvanceForm({ ...advanceForm, date: e.target.value })} />
+          <Field label="Note (optional)" placeholder="e.g. Cash advance, tool reimbursement" value={advanceForm.note} onChange={(e) => setAdvanceForm({ ...advanceForm, note: e.target.value })} />
+          {advanceForm.amount && parseFloat(advanceForm.amount) > 0 && (
+            <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}33`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
+              Net owed after advance: <strong>{$$(Math.max(0, grossOwed - totalAdvances - parseFloat(advanceForm.amount)))}</strong>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setShowAdvanceModal(false)}>Cancel</Btn>
+            <Btn onClick={() => {
+              if (!advanceForm.amount || parseFloat(advanceForm.amount) <= 0) return;
+              onAddAdvance({ contractor_id: contractor.id, amount: parseFloat(advanceForm.amount), date: advanceForm.date, note: advanceForm.note });
+              setAdvanceForm({ amount: "", date: today(), note: "" });
+              setShowAdvanceModal(false);
+            }}>Save Advance</Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -598,6 +658,7 @@ export default function GetPaid() {
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [advances, setAdvances] = useState<Advance[]>([]);
   const [showAddC, setShowAddC] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -612,13 +673,15 @@ export default function GetPaid() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [{ data: c }, { data: p }, { data: l }] = await Promise.all([
+      const [{ data: c }, { data: p }, { data: l }, { data: a }] = await Promise.all([
         supabase.from("contractors").select("*").order("created_at"),
         supabase.from("properties").select("*").order("created_at"),
         supabase.from("logs").select("*").order("date", { ascending: false }),
+        supabase.from("advances").select("*").order("date", { ascending: false }),
       ]);
       setContractors(c || []);
       setProperties(p || []);
+      setAdvances(a || []);
       setLogs((l || []).map((log: Log) => ({
         ...log,
         deductions: Array.isArray(log.deductions) ? log.deductions : JSON.parse(log.deductions || "[]"),
@@ -684,6 +747,16 @@ export default function GetPaid() {
     ));
   };
 
+  const addAdvance = async (advance: Omit<Advance, "id">) => {
+    const { data } = await supabase.from("advances").insert(advance).select().single();
+    if (data) setAdvances(prev => [data, ...prev]);
+  };
+
+  const deleteAdvance = async (id: string) => {
+    await supabase.from("advances").delete().eq("id", id);
+    setAdvances(prev => prev.filter(a => a.id !== id));
+  };
+
   const updateContractor = async (id: string, field: string, value: string | number) => {
     await supabase.from("contractors").update({ [field]: value }).eq("id", id);
     setContractors(contractors.map((c) => c.id === id ? { ...c, [field]: value } : c));
@@ -708,9 +781,13 @@ export default function GetPaid() {
   // Summaries
   const cSummary = contractors.map((c) => {
     const cl = logs.filter((l) => l.contractor_id === c.id);
+    const cAdvances = advances.filter(a => a.contractor_id === c.id);
+    const totalAdvances = cAdvances.reduce((s, a) => s + Number(a.amount), 0);
+    const grossOwed = cl.filter((l) => !l.paid).reduce((s, l) => s + netAmt(l, c.rate), 0);
     return {
       ...c,
-      owed: cl.filter((l) => !l.paid).reduce((s, l) => s + netAmt(l, c.rate), 0),
+      owed: Math.max(0, grossOwed - totalAdvances),
+      advances: totalAdvances,
       paid: cl.filter((l) => l.paid).reduce((s, l) => s + netAmt(l, c.rate), 0),
       hours: cl.reduce((s, l) => s + Number(l.hours), 0),
       count: cl.length,
@@ -827,6 +904,7 @@ export default function GetPaid() {
                   <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{$$(c.rate)}/hr &middot; {hrs(c.hours)}</div></div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {c.owed > 0 && <Pill color={C.red} glow={C.redGlow}>Owes {$$(c.owed)}</Pill>}
+                    {c.advances > 0 && <Pill color={C.accentLight} glow={C.accentGlow}>💵 {$$(c.advances)}</Pill>}
                     {c.paid > 0 && <Pill color={C.green} glow={C.greenGlow}>Paid {$$(c.paid)}</Pill>}
                     {c.count === 0 && <Pill color={C.muted} glow="transparent">No logs</Pill>}
                     <span style={{ color: C.accentLight, fontSize: 16 }}>›</span>
@@ -860,11 +938,12 @@ export default function GetPaid() {
         {tab === "contractors" && (
           selectedContractor ? (
             <ContractorDetail
-              contractor={selectedContractor} logs={logs} properties={properties}
+              contractor={selectedContractor} logs={logs} properties={properties} advances={advances}
               onBack={() => setSelectedContractor(null)}
               onTogglePaid={togglePaid} onDeleteLog={deleteLog} onUpdateLog={updateLog}
               onUpdateContractor={updateContractor} onDeleteContractor={deleteContractor}
               onAddLog={(log) => setLogs(prev => [log, ...prev])}
+              onAddAdvance={addAdvance} onDeleteAdvance={deleteAdvance}
             />
           ) : (
             <div>
