@@ -147,9 +147,8 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
   const taxDeductibleTotal = items.filter(i => i.tax_deductible).reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
 
   const complete = async () => {
-    if (!propertyId) return;
     setSaving(true);
-    await onComplete({ property_id: propertyId, store, date, notes, items });
+    await onComplete({ property_id: propertyId || null, store, date, notes, items });
     setSaving(false);
     onClose();
   };
@@ -279,7 +278,10 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 8, letterSpacing: 0.8, textTransform: "uppercase" }}>Assign to Property</label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <label style={{ color: C.sub, fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" }}>Assign to Property <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+              {propertyId && <button onClick={() => setPropertyId("")} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer" }}>✕ Clear</button>}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {properties.map((p) => (
                 <button key={p.id} onClick={() => setPropertyId(p.id)}
@@ -295,11 +297,18 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <Btn v="ghost" onClick={() => setStep("review")}>Back</Btn>
-            <Btn onClick={complete} style={{ flex: 1 }} v={propertyId ? "success" : "ghost"}>
-              {saving ? "Saving..." : "✓ Complete"}
-            </Btn>
+          <div style={{ display: "flex", gap: 10, flexDirection: "column" }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn v="ghost" onClick={() => setStep("review")}>Back</Btn>
+              <Btn onClick={complete} style={{ flex: 1 }} v={propertyId ? "success" : "primary"}>
+                {saving ? "Saving..." : propertyId ? "✓ Complete" : "Save Without Property"}
+              </Btn>
+            </div>
+            {!propertyId && (
+              <div style={{ fontSize: 12, color: C.muted, textAlign: "center" }}>
+                You can assign this receipt to a property later from the receipt detail view.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -308,11 +317,12 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
 }
 
 // ── Expense Detail ─────────────────────────────────────────────────────────────
-function ExpenseDetail({ expense, propertyName, onBack, onDelete }: {
+function ExpenseDetail({ expense, propertyName, onBack, onDelete, onAssign }: {
   expense: Expense & { items: ExpenseItem[] };
   propertyName: string;
   onBack: () => void;
   onDelete: (id: string) => void;
+  onAssign?: () => void;
 }) {
   const total = expense.items.reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
   const deductible = expense.items.filter(i => i.tax_deductible).reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
@@ -366,10 +376,18 @@ function ExpenseDetail({ expense, propertyName, onBack, onDelete }: {
         {total - deductible > 0 && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted, marginTop: 4 }}><span>Non-deductible</span><span>{$$(total - deductible)}</span></div>}
       </div>
 
-      <button onClick={() => { if (confirm("Delete this expense? This cannot be undone.")) onDelete(expense.id); }}
-        style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 18px", color: C.red, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-        🗑️ Delete Expense
-      </button>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {!expense.property_id && onAssign && (
+          <button onClick={onAssign}
+            style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "10px 18px", color: C.accentLight, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            🏠 Assign to Property
+          </button>
+        )}
+        <button onClick={() => { if (confirm("Delete this expense? This cannot be undone.")) onDelete(expense.id); }}
+          style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "10px 18px", color: C.red, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          🗑️ Delete Expense
+        </button>
+      </div>
     </div>
   );
 }
@@ -381,6 +399,8 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
   const [showScan, setShowScan] = useState(false);
   const [selected, setSelected] = useState<(Expense & { items: ExpenseItem[] }) | null>(null);
   const [filterProperty, setFilterProperty] = useState("all");
+  const [assignTarget, setAssignTarget] = useState<string | null>(null);
+  const [assignPropertyId, setAssignPropertyId] = useState("");
 
   useEffect(() => {
     load();
@@ -418,6 +438,15 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
     setSelected(null);
   };
 
+  const assignToProperty = async () => {
+    if (!assignTarget || !assignPropertyId) return;
+    await supabase.from("expenses").update({ property_id: assignPropertyId }).eq("id", assignTarget);
+    setExpenses(prev => prev.map(e => e.id === assignTarget ? { ...e, property_id: assignPropertyId } : e));
+    if (selected?.id === assignTarget) setSelected(prev => prev ? { ...prev, property_id: assignPropertyId } : null);
+    setAssignTarget(null);
+    setAssignPropertyId("");
+  };
+
   const filtered = filterProperty === "all" ? expenses : expenses.filter(e => e.property_id === filterProperty);
   const totalSpent = filtered.reduce((s, e) => s + e.items.reduce((si, i) => si + Number(i.price) * Number(i.qty), 0), 0);
   const totalDeductible = filtered.reduce((s, e) => s + e.items.filter(i => i.tax_deductible).reduce((si, i) => si + Number(i.price) * Number(i.qty), 0), 0);
@@ -430,6 +459,7 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
       propertyName={getPropertyName(selected.property_id)}
       onBack={() => setSelected(null)}
       onDelete={deleteExpense}
+      onAssign={!selected.property_id ? () => setAssignTarget(selected.id) : undefined}
     />
   );
 
@@ -515,6 +545,30 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
           onComplete={saveExpense}
           onClose={() => setShowScan(false)}
         />
+      )}
+
+      {assignTarget && (
+        <Modal title="Assign to Property" onClose={() => { setAssignTarget(null); setAssignPropertyId(""); }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+            {properties.map((p) => (
+              <button key={p.id} onClick={() => setAssignPropertyId(p.id)}
+                style={{ background: assignPropertyId === p.id ? C.accentGlow : C.surface, border: `1px solid ${assignPropertyId === p.id ? C.accent : C.border}`, borderRadius: 10, padding: "12px 16px", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>🏠</span>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>{p.address}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{p.city}</div>
+                </div>
+                {assignPropertyId === p.id && <span style={{ marginLeft: "auto", color: C.accentLight }}>✓</span>}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn v="ghost" onClick={() => { setAssignTarget(null); setAssignPropertyId(""); }}>Cancel</Btn>
+            <Btn onClick={assignToProperty} style={{ flex: 1 }} v={assignPropertyId ? "success" : "ghost"}>
+              Assign
+            </Btn>
+          </div>
+        </Modal>
       )}
     </div>
   );
