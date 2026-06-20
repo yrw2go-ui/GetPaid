@@ -108,51 +108,13 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
     setStep("scanning");
     setScanError(null);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/scan-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } },
-              {
-                type: "text",
-                text: `You are a receipt data extraction expert for a home rehab/construction company. Analyze this receipt carefully.
-
-Extract all data and return ONLY valid JSON with no markdown, no backticks, no explanation. Use this exact structure:
-{
-  "store": "exact store name (e.g. Home Depot, Menards, Lowes)",
-  "date": "date as YYYY-MM-DD or original format",
-  "notes": "any promo codes, loyalty numbers, or relevant info",
-  "items": [
-    {
-      "name": "full item description",
-      "sku": "SKU, UPC, item number, or barcode if visible (empty string if not found)",
-      "qty": 1,
-      "price": 0.00,
-      "category": "one of: Materials, Tools, Flooring, Plumbing, Electrical, Paint, Hardware, Lumber, Appliances, Other",
-      "tax_deductible": true or false
-    }
-  ]
-}
-
-Category rules: Tools = tax deductible (business equipment). Materials/Hardware/Lumber/Flooring/Paint = used in property, deductible as capital improvement. Appliances = usually deductible. Personal items = not deductible.
-
-Tax deductible rules: If purchased for a rehab/rental property business, most items ARE tax deductible. Mark tax_deductible: true for anything that is clearly for construction, repair, or renovation. Mark false for food, personal items, or unclear items.
-
-Return ONLY the JSON object.`
-              }
-            ]
-          }]
-        })
+        body: JSON.stringify({ imageBase64 }),
       });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      const text = data.content[0].text.trim();
-      const parsed = JSON.parse(text);
+      const parsed = await response.json();
+      if (parsed.error) throw new Error(parsed.error);
       setStore(parsed.store || "");
       setDate(parsed.date || today());
       setNotes(parsed.notes || "");
