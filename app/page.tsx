@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import ExpensesTab from "./expenses";
 import InvoicesTab from "./invoices";
+import ScopeTab from "./scope";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -36,7 +37,7 @@ const today = () => new Date().toISOString().split("T")[0];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Contractor { id: string; name: string; rate: number; color: string; }
-interface Property { id: string; address: string; city: string; }
+interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
 interface Deduction { title: string; amount: number; }
 interface Advance { id: string; contractor_id: string; amount: number; date: string; note: string; }
 interface Log {
@@ -779,6 +780,10 @@ export default function GetPaid() {
     setProperties(properties.filter((p) => p.id !== id));
   };
 
+  const updatePropertyStatus = (p: Property) => {
+    setProperties(prev => prev.map(pp => pp.id === p.id ? p : pp));
+  };
+
   // Summaries
   const cSummary = contractors.map((c) => {
     const cl = logs.filter((l) => l.contractor_id === c.id);
@@ -847,6 +852,7 @@ export default function GetPaid() {
     { id: "1099", label: "1099", icon: "📋" },
     { id: "expenses", label: "Expenses", icon: "🧾" },
     { id: "invoices", label: "Invoices", icon: "📄" },
+    { id: "scope", label: "Scope", icon: "📋" },
   ];
 
   if (loading) return (
@@ -1006,7 +1012,7 @@ export default function GetPaid() {
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
                         <div style={{ fontSize: 30 }}>🏠</div>
                         <div style={{ flex: 1, minWidth: 160 }}>
-                          <div style={{ fontWeight: 700, fontSize: 16 }}>
+                          <div style={{ fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 8 }}>
                             <span onClick={(e) => e.stopPropagation()}><span style={{ cursor: "text", borderBottom: `1px dashed ${C.border}` }} onClick={() => { const v = prompt("Edit address:", p.address); if (v) updateProperty(p.id, "address", v); }}>{p.address}</span></span>
                           </div>
                           <div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>
@@ -1092,6 +1098,11 @@ export default function GetPaid() {
         {/* INVOICES */}
         {tab === "invoices" && (
           <InvoicesTab properties={properties} />
+        )}
+
+        {/* SCOPE */}
+        {tab === "scope" && (
+          <ScopeTab properties={properties} logs={logs} contractors={contractors} expenses={[]} advances={advances} onPropertyUpdate={updatePropertyStatus} />
         )}
 
         {/* 1099 */}
