@@ -866,16 +866,18 @@ export default function GetPaid() {
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', -apple-system, sans-serif", color: C.text }}>
 
       {/* Nav */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${C.accent}, #a78bfa)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>💸</div>
-            <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: -0.5 }}>GetPaid</span>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", height: 60, paddingLeft: 16 }}>
+          {/* Logo — fixed, never scrolls */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${C.border}`, marginRight: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.accent}, #a78bfa)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>💸</div>
+            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.5, whiteSpace: "nowrap" }}>GetPaid</span>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
+          {/* Tabs — scroll independently */}
+          <div style={{ display: "flex", gap: 4, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingRight: 16, flex: 1 }}>
             {TABS.map((t) => (
               <button key={t.id} onClick={() => resetTab(t.id)}
-                style={{ background: tab === t.id ? C.accentGlow : "transparent", border: tab === t.id ? `1px solid ${C.accent}44` : "1px solid transparent", borderRadius: 8, padding: "6px 12px", color: tab === t.id ? C.accentLight : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                style={{ background: tab === t.id ? C.accentGlow : "transparent", border: tab === t.id ? `1px solid ${C.accent}44` : "1px solid transparent", borderRadius: 8, padding: "6px 12px", color: tab === t.id ? C.accentLight : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", flexShrink: 0 }}>
                 <span>{t.icon}</span><span>{t.label}</span>
               </button>
             ))}
