@@ -63,7 +63,9 @@ Rules:
 
     const data = await response.json();
     if (data.error) return NextResponse.json({ error: data.error.message }, { status: 500 });
-    const parsed = JSON.parse(data.content[0].text.trim());
+    let text = data.content[0].text.trim();
+    text = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(text);
     return NextResponse.json(parsed);
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Unknown error" }, { status: 500 });
