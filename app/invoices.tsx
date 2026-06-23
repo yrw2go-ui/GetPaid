@@ -23,7 +23,7 @@ interface Property { id: string; address: string; city: string; }
 interface LineItem { id: string; description: string; materials: number; labor: number; }
 interface Section { id: string; name: string; items: LineItem[]; }
 interface Invoice {
-  id: string; property_id: string; invoice_number: number; date: string;
+  id: string; property_id: string | null; invoice_number: number; date: string;
   status: string; contractor_name: string; contractor_address: string;
   contractor_phone: string; contractor_email: string;
   sections: Section[]; notes: string; created_at: string;
@@ -237,7 +237,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
           <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", fontSize: 14, color: C.text, width: "100%", boxSizing: "border-box" as const }}>
               <span style={{ color: C.muted, fontSize: 11 }}>PROPERTY</span><br />
-              {property ? `${property.address}, ${property.city}` : "—"}
+              <span style={{ color: property ? C.text : C.muted }}>{property ? `${property.address}, ${property.city}` : "No property linked"}</span>
             </div>
           </div>
         </div>
@@ -378,10 +378,10 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
     setSettings(s);
   };
 
-  const createInvoice = async (propertyId: string) => {
+  const createInvoice = async (propertyId: string | null) => {
     const property = properties.find(p => p.id === propertyId);
     const { data } = await supabase.from("invoices").insert({
-      property_id: propertyId,
+      property_id: propertyId || null,
       invoice_number: Math.floor(Math.random() * 900000) + 100000,
       date: today(),
       status: "draft",
@@ -482,12 +482,18 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
           </Btn>
           <input ref={scanFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
             onChange={(e) => { if (e.target.files?.[0]) scanAndCreateInvoice(e.target.files[0]); }} />
-          <div>
-            <select onChange={(e) => { if (e.target.value) { createInvoice(e.target.value); e.target.value = ""; } }}
-              style={{ background: C.accent, border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", outline: "none" }}>
-              <option value="">+ New Invoice</option>
-              {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
-            </select>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => createInvoice(null)}
+              style={{ background: C.accent, border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              + New Invoice
+            </button>
+            {properties.length > 0 && (
+              <select onChange={(e) => { if (e.target.value) { createInvoice(e.target.value); e.target.value = ""; } }}
+                style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 13, cursor: "pointer", outline: "none" }}>
+                <option value="">Link to Property...</option>
+                {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+              </select>
+            )}
           </div>
         </div>
       </div>
@@ -545,7 +551,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: C.accentGlow, border: `1px solid ${C.accent}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📄</div>
                 <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>Invoice #{inv.invoice_number}</div>
-                  <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{prop?.address || "Unknown"} &middot; {inv.date} &middot; {itemCount} items</div>
+                  <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{prop?.address || "No property"} &middot; {inv.date} &middot; {itemCount} items</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontWeight: 800, fontSize: 16, color: C.green }}>{$$(total)}</div>
@@ -560,7 +566,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
           <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>No invoices yet</div>
-            <div style={{ fontSize: 14 }}>Select a property from &quot;+ New Invoice&quot; to get started</div>
+            <div style={{ fontSize: 14 }}>Tap &quot;+ New Invoice&quot; to create a standalone invoice or link one to a property</div>
           </div>
         )}
       </div>
