@@ -45,23 +45,12 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: "16px", overflowY: "auto" }} onClick={onClose}>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: wide ? 780 : 520, marginTop: 20, marginBottom: 20 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <div>
-            <div style={{ color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>Invoice #</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="number"
-                value={form.invoice_number}
-                onChange={(e) => { setForm(f => ({ ...f, invoice_number: parseInt(e.target.value) || f.invoice_number })); setInvNumError(null); }}
-                onBlur={(e) => validateInvoiceNumber(parseInt(e.target.value) || form.invoice_number)}
-                style={{ background: C.surface, border: `1px solid ${invNumError ? C.red : C.border}`, borderRadius: 8, padding: "6px 12px", color: C.text, fontSize: 18, fontWeight: 800, outline: "none", width: 100 }}
-              />
-              {checkingNum && <span style={{ fontSize: 12, color: C.muted }}>Checking...</span>}
-              {invNumError && <span style={{ fontSize: 12, color: C.red }}>⚠️ {invNumError}</span>}
-            </div>
+        {title && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+            <h2 style={{ color: C.text, fontSize: 18, fontWeight: 700, margin: 0 }}>{title}</h2>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
-        </div>
+        )}
         {children}
       </div>
     </div>
@@ -259,6 +248,21 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
     <>
       {showPreview && <InvoicePrint invoice={form} property={property} />}
       <Modal title="" onClose={onClose} wide>
+        {/* Invoice number header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <div>
+            <div style={{ color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>Invoice #</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="number" value={form.invoice_number}
+                onChange={(e) => { setForm(f => ({ ...f, invoice_number: parseInt(e.target.value) || f.invoice_number })); setInvNumError(null); }}
+                onBlur={(e) => validateInvoiceNumber(parseInt(e.target.value) || form.invoice_number)}
+                style={{ background: C.surface, border: `1px solid ${invNumError ? C.red : C.border}`, borderRadius: 8, padding: "6px 12px", color: C.text, fontSize: 20, fontWeight: 800, outline: "none", width: 110 }} />
+              {checkingNum && <span style={{ fontSize: 12, color: C.muted }}>Checking...</span>}
+              {invNumError && <span style={{ fontSize: 12, color: C.red }}>⚠️ {invNumError}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
+        </div>
         {/* Header fields */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
           <Field label="Your Name" value={form.contractor_name} onChange={(e) => setForm(f => ({ ...f, contractor_name: e.target.value }))} />
