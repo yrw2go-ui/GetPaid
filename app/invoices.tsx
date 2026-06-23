@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { jsPDF } from "jspdf";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -314,14 +315,114 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
   };
 
   const sharePDF = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Invoice #${form.invoice_number}`,
-          text: `Invoice #${form.invoice_number} — ${form.contractor_name}\nProperty: ${form.job_address || (property ? property.address : "N/A")}\nDate: ${form.date}\nTotal: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(grandTotal)}`,
-        });
-      } catch { /* cancelled */ }
-    } else {
+    try {
+      const doc = new jsPDF({ unit: "in", format: "letter" });
+      const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+      const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
+      const lm = 0.5; // left margin
+      const pw = 7.5; // page width
+      let y = 0.5;
+
+      // Contractor info box
+      doc.setFontSize(11); doc.setFont("helvetica", "bold");
+      doc.rect(lm, y, 2.8, 0.9);
+      doc.text(form.contractor_name || "CONTRACTOR NAME", lm + 1.4, y + 0.22, { align: "center" });
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      doc.text(form.contractor_address || "", lm + 1.4, y + 0.40, { align: "center" });
+      doc.text(form.contractor_phone || "", lm + 1.4, y + 0.55, { align: "center" });
+      doc.text(form.contractor_email || "", lm + 1.4, y + 0.70, { align: "center" });
+
+      // Date + Invoice number
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.text(`Date: ${form.date}`, pw + lm, y + 0.2, { align: "right" });
+      doc.text(`Invoice #: ${form.invoice_number}`, pw + lm, y + 0.4, { align: "right" });
+      y += 1.1;
+
+      // Property address
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+      doc.text("Property Address: ", lm, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(propAddr, lm + 1.35, y);
+      y += 0.35;
+
+      // Table header
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.line(lm, y, pw + lm, y);
+      y += 0.05;
+      doc.text("Description", lm, y + 0.15);
+      doc.text("Material Costs", lm + 3.8, y + 0.15, { align: "right" });
+      doc.text("Labor", lm + 5.3, y + 0.15, { align: "right" });
+      // Grey total header box
+      doc.setFillColor(136, 136, 136);
+      doc.rect(lm + 5.5, y, 2, 0.28, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.text("Total", lm + 6.5, y + 0.18, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      y += 0.32;
+      doc.line(lm, y, pw + lm, y);
+      y += 0.1;
+
+      // Sections
+      const activeSections = form.sections.filter(s => s.items.length > 0);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      for (const sec of activeSections) {
+        doc.setFont("helvetica", "bold");
+        doc.text(`${sec.name}:`, lm, y + 0.12);
+        doc.setFont("helvetica", "normal");
+        y += 0.25;
+        for (const item of sec.items) {
+          const itemTotal = Number(item.materials) + Number(item.labor);
+          const descLines = doc.splitTextToSize(item.description, 3.5);
+          doc.text(descLines, lm + 0.15, y + 0.12);
+          if (Number(item.materials) > 0) doc.text(fmt(Number(item.materials)), lm + 3.8, y + 0.12, { align: "right" });
+          if (Number(item.labor) > 0) doc.text(fmt(Number(item.labor)), lm + 5.3, y + 0.12, { align: "right" });
+          doc.setFillColor(136, 136, 136);
+          doc.rect(lm + 5.5, y - 0.03, 2, 0.23, "F");
+          doc.setTextColor(255, 255, 255);
+          doc.text(fmt(itemTotal), lm + 6.5, y + 0.12, { align: "center" });
+          doc.setTextColor(0, 0, 0);
+          y += 0.22 * Math.max(1, descLines.length);
+        }
+      }
+
+      // Totals row
+      y += 0.1;
+      doc.line(lm, y, pw + lm, y);
+      y += 0.05;
+      doc.setFont("helvetica", "bolditalic");
+      doc.text("above work has been completed", lm, y + 0.15);
+      doc.setFont("helvetica", "bold");
+      doc.text(fmt(grandMaterials), lm + 3.8, y + 0.15, { align: "right" });
+      doc.text(fmt(grandLabor), lm + 5.3, y + 0.15, { align: "right" });
+      doc.setFillColor(136, 136, 136);
+      doc.rect(lm + 5.5, y, 2, 0.28, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bolditalic");
+      doc.text(fmt(grandTotal), lm + 6.5, y + 0.18, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+      y += 0.4;
+
+      // Notes
+      if (form.notes) {
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        doc.text(form.notes, lm, y + 0.15);
+      }
+
+      const pdfBlob = doc.output("blob");
+      const fileName = `Invoice-${form.invoice_number}.pdf`;
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([pdfBlob], fileName, { type: "application/pdf" })] })) {
+        const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+        await navigator.share({ title: `Invoice #${form.invoice_number}`, files: [file] });
+      } else {
+        // Fallback: download the PDF
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement("a");
+        a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      console.error("Share failed:", e);
       printPDF();
     }
   };
