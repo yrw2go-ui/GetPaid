@@ -80,8 +80,8 @@ function PropertyPL({ property, scopeItems, logs, contractors, expenses, advance
   const pExpenses = expenses.filter(e => e.property_id === property.id);
   const pMileage = mileageLogs.filter(m => m.property_id === property.id);
 
-  // Expected revenue = completed items, paint labor counts but paint cost excluded
-  const expectedRevenue = scopeItems.filter(i => i.completed && !i.excluded_from_invoice).reduce((s, i) => {
+  // Expected revenue = ALL scope items (not just completed), paint labor counts but paint cost excluded
+  const expectedRevenue = scopeItems.filter(i => !i.excluded_from_invoice).reduce((s, i) => {
     const paintItem = isPaint(i.description);
     return s + (paintItem ? Number(i.labor) : Number(i.cost) + Number(i.labor));
   }, 0);
