@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import ExpensesTab from "./expenses";
+import InvoicesTab from "./invoices";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -845,6 +846,7 @@ export default function GetPaid() {
     { id: "logs", label: "Hours", icon: "🕐" },
     { id: "1099", label: "1099", icon: "📋" },
     { id: "expenses", label: "Expenses", icon: "🧾" },
+    { id: "invoices", label: "Invoices", icon: "📄" },
   ];
 
   if (loading) return (
@@ -890,8 +892,9 @@ export default function GetPaid() {
               <StatCard label="Hours Logged" value={hrs(totalHours)} color={C.yellow} icon="⏱️" />
               <StatCard label="Crew" value={contractors.length} color={C.accentLight} icon="👷" />
             </div>
-            <div style={{ marginBottom: 28 }}>
+            <div style={{ marginBottom: 28, display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Btn onClick={() => setShowLog(true)} style={{ fontSize: 15, padding: "12px 28px" }}>+ Log Hours</Btn>
+              <Btn v="ghost" onClick={() => resetTab("invoices")} style={{ fontSize: 15, padding: "12px 28px" }}>📄 Invoices</Btn>
             </div>
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 14, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Crew Summary</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
@@ -1084,6 +1087,11 @@ export default function GetPaid() {
         {/* EXPENSES */}
         {tab === "expenses" && (
           <ExpensesTab properties={properties} />
+        )}
+
+        {/* INVOICES */}
+        {tab === "invoices" && (
+          <InvoicesTab properties={properties} />
         )}
 
         {/* 1099 */}
