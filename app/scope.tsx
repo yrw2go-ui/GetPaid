@@ -72,17 +72,21 @@ function StatCard({ label, value, color, icon }: { label: string; value: string 
 }
 
 // ── Property P&L ──────────────────────────────────────────────────────────────
-function PropertyPL({ property, scopeItems, logs, contractors, expenses, advances, mileageLogs }: {
+function PropertyPL({ property, scopeItems, logs, contractors, expenses, advances, mileageLogs, invoiceSubmitted }: {
   property: Property; scopeItems: ScopeItem[]; logs: Log[]; contractors: Contractor[];
-  expenses: Expense[]; advances: Advance[]; mileageLogs: MileageLog[];
+  expenses: Expense[]; advances: Advance[]; mileageLogs: MileageLog[]; invoiceSubmitted?: boolean;
 }) {
   const pLogs = logs.filter(l => l.property_id === property.id);
   const pExpenses = expenses.filter(e => e.property_id === property.id);
   const pMileage = mileageLogs.filter(m => m.property_id === property.id);
 
-  // Revenue from completed non-paint scope items
-  const revenue = scopeItems.filter(i => i.completed && !isPaint(i.description) && !i.excluded_from_invoice)
-    .reduce((s, i) => s + Number(i.cost) + Number(i.labor), 0);
+  // Expected revenue = completed items, paint labor counts but paint cost excluded
+  const expectedRevenue = scopeItems.filter(i => i.completed && !i.excluded_from_invoice).reduce((s, i) => {
+    const paintItem = isPaint(i.description);
+    return s + (paintItem ? Number(i.labor) : Number(i.cost) + Number(i.labor));
+  }, 0);
+  // Actual revenue only shows after invoice submitted
+  const revenue = invoiceSubmitted ? expectedRevenue : 0;
 
   // Labor costs
   const laborCost = pLogs.reduce((s, l) => {
@@ -105,15 +109,23 @@ function PropertyPL({ property, scopeItems, logs, contractors, expenses, advance
   const totalMiles = pMileage.reduce((s, m) => s + Number(m.miles), 0);
 
   const totalCosts = laborCost + materialCost + mileageCost;
-  const netProfit = revenue - totalCosts;
+  const netProfit = (invoiceSubmitted ? revenue : expectedRevenue) - totalCosts;
 
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", marginBottom: 24 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Property P&L</div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8 }}>
-        <span style={{ color: C.muted }}>Invoice Revenue</span>
-        <span style={{ color: C.green, fontWeight: 700 }}>{$$(revenue)}</span>
-      </div>
+      {!invoiceSubmitted && (
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8, alignItems: "center" }}>
+          <span style={{ color: C.muted }}>Expected Invoice Revenue</span>
+          <span style={{ color: C.yellow, fontWeight: 700 }}>{$$(expectedRevenue)}</span>
+        </div>
+      )}
+      {invoiceSubmitted && (
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8, alignItems: "center" }}>
+          <span style={{ color: C.muted }}>Invoice Revenue</span>
+          <span style={{ color: C.green, fontWeight: 700 }}>{$$(revenue)}</span>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
         <span style={{ color: C.muted }}>Labor (payroll)</span>
         <span style={{ color: C.red }}>-{$$(laborCost)}</span>
@@ -155,19 +167,33 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
   const [editItem, setEditItem] = useState<ScopeItem | null>(null);
   const [newItem, setNewItem] = useState({ description: "", cost: "", labor: "" });
   const [mileageForm, setMileageForm] = useState({ date: today(), miles: "", note: "" });
+  const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadData(); }, [property.id]);
 
   const loadData = async () => {
     setLoading(true);
-    const [{ data: s }, { data: m }] = await Promise.all([
+    const [{ data: s }, { data: m }, { data: inv }] = await Promise.all([
       supabase.from("scope_items").select("*").eq("property_id", property.id).order("sort_order"),
       supabase.from("mileage_logs").select("*").eq("property_id", property.id).order("date", { ascending: false }),
+      supabase.from("invoices").select("id,status").eq("property_id", property.id).eq("status", "submitted").limit(1),
     ]);
     setItems(s || []);
     setMileageLogs(m || []);
+    setInvoiceSubmitted(!!(inv && inv.length > 0));
     setLoading(false);
+  };
+
+  const toggleInvoiceSubmitted = async () => {
+    const newVal = !invoiceSubmitted;
+    if (newVal) {
+      // Mark all invoices for this property as submitted
+      await supabase.from("invoices").update({ status: "submitted" }).eq("property_id", property.id);
+    } else {
+      await supabase.from("invoices").update({ status: "draft" }).eq("property_id", property.id);
+    }
+    setInvoiceSubmitted(newVal);
   };
 
   const scanScope = async (file: File) => {
@@ -294,6 +320,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           <input ref={fileRef} type="file" accept="image/*,application/pdf,.doc,.docx" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && scanScope(e.target.files[0])} />
           <Btn v="ghost" onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "Scanning..." : "📎 Upload Scope"}</Btn>
           <Btn v="ghost" onClick={() => setShowMileage(!showMileage)}>🚗 Mileage</Btn>
+          <Btn v={invoiceSubmitted ? "success" : "ghost"} onClick={toggleInvoiceSubmitted}>{invoiceSubmitted ? "✓ Invoice Submitted" : "📤 Mark Invoice Submitted"}</Btn>
           <Btn v={isClosed ? "ghost" : "success"} onClick={() => setShowCloseConfirm(true)}>{isClosed ? "↩ Reopen" : "✓ Close Property"}</Btn>
         </div>
       </div>
@@ -310,7 +337,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
       </div>
 
       {/* P&L */}
-      <PropertyPL property={property} scopeItems={items} logs={logs} contractors={contractors} expenses={expenses} advances={advances} mileageLogs={[...mileageLogs, ...allMileageLogs.filter(m => m.property_id !== property.id ? false : true)]} />
+      <PropertyPL property={property} scopeItems={items} logs={logs} contractors={contractors} expenses={expenses} advances={advances} mileageLogs={[...mileageLogs, ...allMileageLogs.filter(m => m.property_id !== property.id ? false : true)]} invoiceSubmitted={invoiceSubmitted} />
 
       {/* Mileage section */}
       {showMileage && (
