@@ -351,6 +351,9 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
   const [showSettings, setShowSettings] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
   const [filterProperty, setFilterProperty] = useState("all");
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -400,6 +403,58 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
     }
   };
 
+  const scanAndCreateInvoice = async (file: File) => {
+    setScanning(true);
+    setScanError(null);
+    try {
+      const base64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = (e) => res((e.target?.result as string).split(",")[1]);
+        r.onerror = () => rej(new Error("Read failed"));
+        r.readAsDataURL(file);
+      });
+
+      const response = await fetch("/api/scan-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+      const parsed = await response.json();
+      if (parsed.error) throw new Error(parsed.error);
+
+      // Find matching property by address if possible
+      const matchedProperty = properties.find(p =>
+        parsed.property_address && p.address.toLowerCase().includes(parsed.property_address.toLowerCase().split(",")[0])
+      );
+
+      // Get next invoice number
+      const maxNum = invoices.length > 0 ? Math.max(...invoices.map(i => i.invoice_number)) : 141;
+      const invNum = parsed.invoice_number && parsed.invoice_number > 0 ? parsed.invoice_number : maxNum + 1;
+
+      const { data } = await supabase.from("invoices").insert({
+        property_id: matchedProperty?.id || properties[0]?.id || null,
+        invoice_number: invNum,
+        date: parsed.date || today(),
+        status: "draft",
+        contractor_name: parsed.contractor_name || settings.name,
+        contractor_address: parsed.contractor_address || settings.address,
+        contractor_phone: parsed.contractor_phone || settings.phone,
+        contractor_email: parsed.contractor_email || settings.email,
+        sections: JSON.stringify(parsed.sections || DEFAULT_SECTIONS),
+        notes: parsed.notes || settings.payment_info,
+      }).select().single();
+
+      if (data) {
+        const inv = { ...data, sections: parsed.sections || DEFAULT_SECTIONS };
+        setInvoices(prev => [inv, ...prev]);
+        setEditInvoice(inv);
+      }
+    } catch (e: unknown) {
+      setScanError("Could not read invoice: " + (e instanceof Error ? e.message : String(e)));
+    }
+    setScanning(false);
+  };
+
   const deleteInvoice = async (id: string) => {
     await supabase.from("invoices").delete().eq("id", id);
     setInvoices(prev => prev.filter(i => i.id !== id));
@@ -420,9 +475,14 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
           <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Invoices</h1>
           <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>{invoices.length} invoices &middot; {$$(grandTotal)} total billed</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Btn v="ghost" onClick={() => setShowSettings(true)}>⚙️ My Info</Btn>
-          <div style={{ position: "relative" }}>
+          <Btn v="ghost" onClick={() => scanFileRef.current?.click()} style={{ position: "relative" }}>
+            {scanning ? "Scanning..." : "📷 Scan Invoice"}
+          </Btn>
+          <input ref={scanFileRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) scanAndCreateInvoice(e.target.files[0]); }} />
+          <div>
             <select onChange={(e) => { if (e.target.value) { createInvoice(e.target.value); e.target.value = ""; } }}
               style={{ background: C.accent, border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", outline: "none" }}>
               <option value="">+ New Invoice</option>
@@ -447,6 +507,17 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{new Set(invoices.map(i => i.property_id)).size}</div>
         </div>
       </div>
+
+      {scanError && (
+        <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#ef4444" }}>
+          ⚠️ {scanError} <button onClick={() => setScanError(null)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", marginLeft: 8 }}>✕</button>
+        </div>
+      )}
+      {scanning && (
+        <div style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "#a78bfa", textAlign: "center" }}>
+          🤖 AI is reading your invoice — extracting line items, amounts, and contractor info...
+        </div>
+      )}
 
       {/* Filter */}
       <div style={{ marginBottom: 20 }}>
