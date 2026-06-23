@@ -239,43 +239,96 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
     onClose();
   };
 
+  const buildInvoiceHTML = () => {
+    const secs = form.sections.filter(s => s.items.length > 0);
+    const grandMat = form.sections.reduce((s, sec) => s + sec.items.reduce((si, i) => si + Number(i.materials), 0), 0);
+    const grandLab = form.sections.reduce((s, sec) => s + sec.items.reduce((si, i) => si + Number(i.labor), 0), 0);
+    const grandTot = grandMat + grandLab;
+    const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+    const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
+
+    const rows = secs.map(sec => `
+      <tr><td colspan="4" style="padding:10px 8px 4px;font-weight:700;font-size:14px">${sec.name}:</td></tr>
+      ${sec.items.map(item => `
+        <tr>
+          <td style="padding:4px 8px 4px 20px">${item.description}</td>
+          <td style="text-align:right;padding:4px 8px">${Number(item.materials) > 0 ? fmt(Number(item.materials)) : ""}</td>
+          <td style="text-align:right;padding:4px 8px">${Number(item.labor) > 0 ? fmt(Number(item.labor)) : ""}</td>
+          <td style="text-align:right;padding:4px 8px;background:#888;color:#fff">${fmt(Number(item.materials)+Number(item.labor))}</td>
+        </tr>`).join("")}
+    `).join("");
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; color: #000; margin: 0; padding: 0.5in; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        @page { margin: 0.5in; size: 8.5in 11in; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+        <div style="border:2px solid #000;padding:10px 16px;width:220px;text-align:center">
+          <div style="font-weight:700;font-size:14px">${form.contractor_name || "CONTRACTOR NAME"}</div>
+          <div style="font-size:12px;margin-top:3px">${form.contractor_address || "ADDRESS"}</div>
+          <div style="font-size:12px">${form.contractor_phone || "PHONE"}</div>
+          <div style="font-size:12px">${form.contractor_email || "EMAIL"}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px"><strong>Date:</strong> ${form.date}</div>
+          <div style="font-size:13px;margin-top:6px"><strong>Invoice #:</strong> ${form.invoice_number}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;font-size:14px">
+        <strong>Property Address:</strong> ${propAddr}
+      </div>
+      <table>
+        <thead>
+          <tr style="border-bottom:2px solid #000">
+            <th style="text-align:left;padding:6px 8px;width:50%;text-decoration:underline">Description</th>
+            <th style="text-align:right;padding:6px 8px;text-decoration:underline">Material Costs</th>
+            <th style="text-align:right;padding:6px 8px;text-decoration:underline">Labor</th>
+            <th style="text-align:right;padding:6px 8px;background:#888;color:#fff;text-decoration:underline">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+          <tr style="border-top:2px solid #000">
+            <td style="padding:10px 8px;font-weight:700;font-style:italic">above work has been completed</td>
+            <td style="text-align:right;padding:10px 8px;font-weight:700">${fmt(grandMat)}</td>
+            <td style="text-align:right;padding:10px 8px;font-weight:700">${fmt(grandLab)}</td>
+            <td style="text-align:right;padding:10px 8px;background:#888;color:#fff;font-weight:700;font-style:italic">${fmt(grandTot)}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${form.notes ? `<div style="margin-top:24px;font-size:13px">${form.notes}</div>` : ""}
+      <script>window.onload = () => { window.print(); }<\/script>
+    </body></html>`;
+  };
+
   const printPDF = () => {
-    setShowPreview(true);
-    // Wait for InvoicePrint to mount in DOM before printing
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.print();
-        setTimeout(() => setShowPreview(false), 800);
-      });
-    });
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(buildInvoiceHTML());
+      win.document.close();
+    }
   };
 
   const sharePDF = async () => {
-    setShowPreview(true);
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (navigator.share) {
       try {
         await navigator.share({
           title: `Invoice #${form.invoice_number}`,
-          text: `Invoice #${form.invoice_number} — ${form.contractor_name}\nProperty: ${form.job_address || (property ? property.address : "N/A")}\nDate: ${form.date}`,
+          text: `Invoice #${form.invoice_number} — ${form.contractor_name}\nProperty: ${form.job_address || (property ? property.address : "N/A")}\nDate: ${form.date}\nTotal: ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(grandTotal)}`,
         });
-      } catch {
-        // User cancelled share
-      }
+      } catch { /* cancelled */ }
     } else {
-      // Fallback to print
-      window.print();
+      printPDF();
     }
-    setTimeout(() => setShowPreview(false), 1000);
   };
 
   return (
     <>
-      {showPreview && (
-        <div style={{ position: "fixed", left: 0, top: 0, width: "100%", zIndex: -999, opacity: 0, pointerEvents: "none" }}>
-          <InvoicePrint invoice={form} property={property} />
-        </div>
-      )}
+
       <Modal title="" onClose={onClose} wide>
         {/* Invoice number header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
