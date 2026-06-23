@@ -413,14 +413,18 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
       const pdfBlob = doc.output("blob");
       const fileName = `Invoice-${form.invoice_number}.pdf`;
 
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([pdfBlob], fileName, { type: "application/pdf" })] })) {
-        const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+      // Try native file share first
+      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ title: `Invoice #${form.invoice_number}`, files: [file] });
       } else {
-        // Fallback: download the PDF
+        // Download PDF — user can then share from their files app
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement("a");
-        a.href = url; a.download = fileName; a.click();
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
     } catch (e) {
