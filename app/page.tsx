@@ -653,7 +653,14 @@ function ContractorDetail({ contractor, logs, properties, advances, onBack, onTo
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function GetPaid() {
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      const valid = ["dashboard", "contractors", "properties", "logs", "1099", "expenses", "invoices", "scope"];
+      return valid.includes(hash) ? hash : "dashboard";
+    }
+    return "dashboard";
+  });
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -842,7 +849,12 @@ export default function GetPaid() {
   const lDedTotal = lDeds.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
   const lNet = Math.max(0, lGross - lDedTotal);
 
-  const resetTab = (id: string) => { setTab(id); setSelectedProperty(null); setSelectedContractor(null); };
+  const resetTab = (id: string) => {
+    setTab(id);
+    setSelectedProperty(null);
+    setSelectedContractor(null);
+    if (typeof window !== "undefined") window.location.hash = id;
+  };
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", icon: "⚡" },
