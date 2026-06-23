@@ -76,11 +76,12 @@ function Btn({ children, onClick, v = "primary", style = {} }: { children: React
 // ── PDF Print Styles ──────────────────────────────────────────────────────────
 const PRINT_STYLES = `
 @media print {
-  body * { visibility: hidden !important; }
-  #invoice-print, #invoice-print * { visibility: visible !important; }
-  #invoice-print { position: fixed; left: 0; top: 0; width: 100%; }
-  @page { margin: 0.5in; size: letter; }
+  body > * { display: none !important; }
+  #invoice-print { display: block !important; position: fixed; left: 0; top: 0; width: 100%; }
+  #invoice-print * { visibility: visible !important; }
+  @page { margin: 0.5in; size: 8.5in 11in; }
 }
+#invoice-print { display: none; }
 `;
 
 // ── Invoice Print View ────────────────────────────────────────────────────────
@@ -100,16 +101,16 @@ function InvoicePrint({ invoice, property }: { invoice: Invoice; property: Prope
       <style>{PRINT_STYLES}</style>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, paddingTop: 20 }}>
-        <div style={{ border: "2px solid #000", padding: "12px 20px", minWidth: 200, textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>{invoice.contractor_name || "CONTRACTOR NAME"}</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>{invoice.contractor_address || "CONTRACTOR ADDRESS"}</div>
-          <div style={{ fontSize: 13 }}>{invoice.contractor_phone || "PHONE #"}</div>
-          <div style={{ fontSize: 13 }}>{invoice.contractor_email || "EMAIL"}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, paddingTop: 20, gap: 20 }}>
+        <div style={{ border: "2px solid #000", padding: "10px 16px", width: 220, flexShrink: 0, textAlign: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{invoice.contractor_name || "CONTRACTOR NAME"}</div>
+          <div style={{ fontSize: 12, marginTop: 3 }}>{invoice.contractor_address || "CONTRACTOR ADDRESS"}</div>
+          <div style={{ fontSize: 12 }}>{invoice.contractor_phone || "PHONE #"}</div>
+          <div style={{ fontSize: 12 }}>{invoice.contractor_email || "EMAIL"}</div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 14 }}><strong>Date:</strong> {invoice.date}</div>
-          <div style={{ fontSize: 14, marginTop: 8 }}><strong>Invoice #:</strong> {invoice.invoice_number}</div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontSize: 13 }}><strong>Date:</strong> {invoice.date}</div>
+          <div style={{ fontSize: 13, marginTop: 6 }}><strong>Invoice #:</strong> {invoice.invoice_number}</div>
         </div>
       </div>
 
@@ -241,12 +242,19 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   const printPDF = () => {
     setShowPreview(true);
-    setTimeout(() => window.print(), 300);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setShowPreview(false), 1000);
+    }, 400);
   };
 
   return (
     <>
-      {showPreview && <InvoicePrint invoice={form} property={property} />}
+      {showPreview && (
+        <div style={{ position: "fixed", left: -9999, top: 0 }}>
+          <InvoicePrint invoice={form} property={property} />
+        </div>
+      )}
       <Modal title="" onClose={onClose} wide>
         {/* Invoice number header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
