@@ -195,9 +195,9 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           completed: false,
           excluded_from_invoice: isPaint(item.description || ""),
           sort_order: (items.length + idx),
-          is_paint: isPaint(item.description || ""),
         }));
-        const { data } = await supabase.from("scope_items").insert(rows).select();
+        const { data, error } = await supabase.from("scope_items").insert(rows).select();
+        if (error) throw new Error("Save failed: " + error.message);
         if (data) setItems(prev => [...prev, ...data]);
       }
     } catch (e: unknown) {
@@ -212,7 +212,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
     const { data } = await supabase.from("scope_items").insert({
       property_id: property.id, description: newItem.description,
       cost: parseFloat(newItem.cost) || 0, labor: parseFloat(newItem.labor) || 0,
-      completed: false, excluded_from_invoice: paint, is_paint: paint,
+      completed: false, excluded_from_invoice: paint,
       sort_order: items.length,
     }).select().single();
     if (data) setItems(prev => [...prev, data]);
