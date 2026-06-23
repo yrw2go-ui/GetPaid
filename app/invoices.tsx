@@ -46,7 +46,20 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: "16px", overflowY: "auto" }} onClick={onClose}>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: wide ? 780 : 520, marginTop: 20, marginBottom: 20 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ color: C.text, fontSize: 18, fontWeight: 700, margin: 0 }}>{title}</h2>
+          <div>
+            <div style={{ color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 }}>Invoice #</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="number"
+                value={form.invoice_number}
+                onChange={(e) => { setForm(f => ({ ...f, invoice_number: parseInt(e.target.value) || f.invoice_number })); setInvNumError(null); }}
+                onBlur={(e) => validateInvoiceNumber(parseInt(e.target.value) || form.invoice_number)}
+                style={{ background: C.surface, border: `1px solid ${invNumError ? C.red : C.border}`, borderRadius: 8, padding: "6px 12px", color: C.text, fontSize: 18, fontWeight: 800, outline: "none", width: 100 }}
+              />
+              {checkingNum && <span style={{ fontSize: 12, color: C.muted }}>Checking...</span>}
+              {invNumError && <span style={{ fontSize: 12, color: C.red }}>⚠️ {invNumError}</span>}
+            </div>
+          </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
         {children}
@@ -179,6 +192,21 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
   const [showPreview, setShowPreview] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [invNumError, setInvNumError] = useState<string | null>(null);
+  const [checkingNum, setCheckingNum] = useState(false);
+
+  const validateInvoiceNumber = async (num: number) => {
+    if (num === invoice.invoice_number) { setInvNumError(null); return true; }
+    setCheckingNum(true);
+    const { data } = await supabase.from("invoices").select("id").eq("invoice_number", num).neq("id", invoice.id).limit(1);
+    setCheckingNum(false);
+    if (data && data.length > 0) {
+      setInvNumError(`Invoice #${num} is already used`);
+      return false;
+    }
+    setInvNumError(null);
+    return true;
+  };
 
   const updateSection = (sectionId: string, items: LineItem[]) => {
     setForm(f => ({ ...f, sections: f.sections.map(s => s.id === sectionId ? { ...s, items } : s) }));
@@ -207,8 +235,11 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
   const grandTotal = grandMaterials + grandLabor;
 
   const save = async () => {
+    const valid = await validateInvoiceNumber(form.invoice_number);
+    if (!valid) return;
     setSaving(true);
     await supabase.from("invoices").update({
+      invoice_number: form.invoice_number,
       date: form.date, contractor_name: form.contractor_name, contractor_address: form.contractor_address,
       contractor_phone: form.contractor_phone, contractor_email: form.contractor_email,
       sections: JSON.stringify(form.sections), notes: form.notes, status: form.status,
@@ -227,7 +258,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
   return (
     <>
       {showPreview && <InvoicePrint invoice={form} property={property} />}
-      <Modal title={`Invoice #${form.invoice_number}`} onClose={onClose} wide>
+      <Modal title="" onClose={onClose} wide>
         {/* Header fields */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
           <Field label="Your Name" value={form.contractor_name} onChange={(e) => setForm(f => ({ ...f, contractor_name: e.target.value }))} />
