@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -188,12 +189,60 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
   const toggleInvoiceSubmitted = async () => {
     const newVal = !invoiceSubmitted;
     if (newVal) {
-      // Mark all invoices for this property as submitted
       await supabase.from("invoices").update({ status: "submitted" }).eq("property_id", property.id);
     } else {
       await supabase.from("invoices").update({ status: "draft" }).eq("property_id", property.id);
     }
     setInvoiceSubmitted(newVal);
+  };
+
+  const sendToInvoice = async () => {
+    // Load user settings for contractor info
+    const { data: setts } = await supabase.from("user_settings").select("*");
+    const s: Record<string, string> = {};
+    (setts || []).forEach((row: { key: string; value: string }) => { s[row.key] = row.value; });
+
+    // Get next invoice number
+    const { data: existingInvs } = await supabase.from("invoices").select("invoice_number").order("invoice_number", { ascending: false }).limit(1);
+    const lastNum = existingInvs?.[0]?.invoice_number || 141;
+    const invNum = lastNum + 1;
+
+    // Build sections from scope items - exclude paint cost, include paint labor
+    const invoiceableItems = items.filter(i => !i.excluded_from_invoice);
+    const miscItems = invoiceableItems.map(i => {
+      const paint = isPaint(i.description);
+      return {
+        id: i.id,
+        description: i.description,
+        materials: paint ? 0 : Number(i.cost),
+        labor: Number(i.labor),
+      };
+    });
+
+    const sections = [
+      { id: "exterior", name: "Exterior", items: [] as { id: string; description: string; materials: number; labor: number }[] },
+      { id: "interior", name: "Interior", items: [] as { id: string; description: string; materials: number; labor: number }[] },
+      { id: "bathroom", name: "Bathroom", items: [] as { id: string; description: string; materials: number; labor: number }[] },
+      { id: "kitchen", name: "Kitchen", items: [] as { id: string; description: string; materials: number; labor: number }[] },
+      { id: "misc", name: "Misc", items: miscItems },
+    ];
+
+    const { data } = await supabase.from("invoices").insert({
+      property_id: property.id,
+      invoice_number: invNum,
+      date: today(),
+      status: "draft",
+      contractor_name: s.name || "",
+      contractor_address: s.address || "",
+      contractor_phone: s.phone || "",
+      contractor_email: s.email || "",
+      sections: JSON.stringify(sections),
+      notes: s.payment_info || "",
+    }).select().single();
+
+    if (data) {
+      alert(`Invoice #${invNum} created! Go to the Invoices tab to view and download it.`);
+    }
   };
 
   const scanScope = async (file: File) => {
@@ -321,6 +370,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           <Btn v="ghost" onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "Scanning..." : "📎 Upload Scope"}</Btn>
           <Btn v="ghost" onClick={() => setShowMileage(!showMileage)}>🚗 Mileage</Btn>
           <Btn v={invoiceSubmitted ? "success" : "ghost"} onClick={toggleInvoiceSubmitted}>{invoiceSubmitted ? "✓ Invoice Submitted" : "📤 Mark Invoice Submitted"}</Btn>
+          <Btn v="primary" onClick={sendToInvoice} style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}>📄 Send to Invoice</Btn>
           <Btn v={isClosed ? "ghost" : "success"} onClick={() => setShowCloseConfirm(true)}>{isClosed ? "↩ Reopen" : "✓ Close Property"}</Btn>
         </div>
       </div>
