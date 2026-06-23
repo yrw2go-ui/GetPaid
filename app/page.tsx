@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import ExpensesTab from "./expenses";
 import InvoicesTab from "./invoices";
 import ScopeTab from "./scope";
+import TaxTab from "./tax";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -865,6 +866,7 @@ export default function GetPaid() {
     { id: "expenses", label: "Expenses", icon: "🧾" },
     { id: "invoices", label: "Invoices", icon: "📄" },
     { id: "scope", label: "Scope", icon: "📋" },
+    { id: "tax", label: "Tax", icon: "💼" },
   ];
 
   if (loading) return (
@@ -1117,6 +1119,11 @@ export default function GetPaid() {
         {/* SCOPE */}
         {tab === "scope" && (
           <ScopeTab properties={properties} logs={logs} contractors={contractors} expenses={[]} advances={advances} onPropertyUpdate={updatePropertyStatus} />
+        )}
+
+        {/* TAX */}
+        {tab === "tax" && (
+          <TaxTab properties={properties} />
         )}
 
         {/* 1099 */}
