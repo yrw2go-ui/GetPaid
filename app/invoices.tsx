@@ -76,9 +76,15 @@ function Btn({ children, onClick, v = "primary", style = {} }: { children: React
 // ── PDF Print Styles ──────────────────────────────────────────────────────────
 const PRINT_STYLES = `
 @media print {
-  body > * { display: none !important; }
-  #invoice-print { display: block !important; }
-  #invoice-print * { visibility: visible !important; }
+  body * { visibility: hidden !important; }
+  #invoice-print, #invoice-print * { visibility: visible !important; }
+  #invoice-print {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    background: white !important;
+  }
   @page { margin: 0.5in; size: 8.5in 11in; }
 }
 `;
@@ -129,18 +135,12 @@ function InvoicePrint({ invoice, property }: { invoice: Invoice; property: Prope
           </tr>
         </thead>
         <tbody>
-          {sectionTotals.map((section) => (
+          {sectionTotals.filter(s => s.items.length > 0).map((section) => (
             <>
               <tr key={section.id + "-header"}>
                 <td colSpan={4} style={{ padding: "10px 8px 4px", fontWeight: 700, fontSize: 14 }}>{section.name}:</td>
               </tr>
-              {section.items.length === 0 && (
-                <tr key={section.id + "-empty"}>
-                  <td style={{ padding: "4px 8px 4px 20px", color: "#999" }}></td>
-                  <td></td><td></td>
-                  <td style={{ textAlign: "right", padding: "4px 8px", background: "#888", color: "#fff" }}></td>
-                </tr>
-              )}
+
               {section.items.map((item) => (
                 <tr key={item.id}>
                   <td style={{ padding: "4px 8px 4px 20px" }}>{item.description}</td>
@@ -268,7 +268,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   return (
     <>
-      <div id="invoice-print-wrapper" style={{ display: showPreview ? "block" : "none", position: "fixed", left: 0, top: 0, width: "100%", zIndex: -1 }}>
+      <div style={{ position: "fixed", left: 0, top: 0, width: "100%", zIndex: -999, opacity: 0, pointerEvents: "none" }}>
         <InvoicePrint invoice={form} property={property} />
       </div>
       <Modal title="" onClose={onClose} wide>
