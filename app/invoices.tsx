@@ -241,15 +241,18 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   const printPDF = () => {
     setShowPreview(true);
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => setShowPreview(false), 1000);
-    }, 400);
+    // Wait for InvoicePrint to mount in DOM before printing
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+        setTimeout(() => setShowPreview(false), 800);
+      });
+    });
   };
 
   const sharePDF = async () => {
     setShowPreview(true);
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (navigator.share) {
       try {
         await navigator.share({
@@ -268,9 +271,11 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   return (
     <>
-      <div style={{ position: "fixed", left: 0, top: 0, width: "100%", zIndex: -999, opacity: 0, pointerEvents: "none" }}>
-        <InvoicePrint invoice={form} property={property} />
-      </div>
+      {showPreview && (
+        <div style={{ position: "fixed", left: 0, top: 0, width: "100%", zIndex: -999, opacity: 0, pointerEvents: "none" }}>
+          <InvoicePrint invoice={form} property={property} />
+        </div>
+      )}
       <Modal title="" onClose={onClose} wide>
         {/* Invoice number header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
