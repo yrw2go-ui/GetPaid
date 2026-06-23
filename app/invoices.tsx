@@ -315,8 +315,10 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   const sharePDF = async () => {
     try {
-      const { jsPDF } = await import("jspdf");
-      const doc = new jsPDF({ unit: "in", format: "letter" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const jspdfModule = await import("jspdf" as any);
+      const JsPDF = jspdfModule.jsPDF || jspdfModule.default;
+      const doc = new JsPDF({ unit: "in", format: "letter" });
       const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
       const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
       const lm = 0.5; // left margin
