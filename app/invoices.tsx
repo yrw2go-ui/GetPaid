@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { jsPDF } from "jspdf";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -316,6 +315,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
 
   const sharePDF = async () => {
     try {
+      const { jsPDF } = await import("jspdf");
       const doc = new jsPDF({ unit: "in", format: "letter" });
       const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
       const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
