@@ -466,7 +466,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
     return s + secs.reduce((ss: number, sec: Section) => ss + sec.items.reduce((si, item) => si + Number(item.materials) + Number(item.labor), 0), 0);
   }, 0);
 
-  const getProperty = (id: string) => properties.find(p => p.id === id);
+  const getProperty = (id: string | null) => id ? properties.find(p => p.id === id) : undefined;
 
   return (
     <div>
