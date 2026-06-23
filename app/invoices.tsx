@@ -77,11 +77,10 @@ function Btn({ children, onClick, v = "primary", style = {} }: { children: React
 const PRINT_STYLES = `
 @media print {
   body > * { display: none !important; }
-  #invoice-print { display: block !important; position: fixed; left: 0; top: 0; width: 100%; }
+  #invoice-print { display: block !important; }
   #invoice-print * { visibility: visible !important; }
   @page { margin: 0.5in; size: 8.5in 11in; }
 }
-#invoice-print { display: none; }
 `;
 
 // ── Invoice Print View ────────────────────────────────────────────────────────
@@ -97,7 +96,7 @@ function InvoicePrint({ invoice, property }: { invoice: Invoice; property: Prope
   const grandTotal = grandMaterials + grandLabor;
 
   return (
-    <div id="invoice-print" style={{ fontFamily: "Arial, sans-serif", color: "#000", background: "#fff", padding: "0 20px" }}>
+    <div id="invoice-print" style={{ fontFamily: "Arial, sans-serif", color: "#000", background: "#fff", padding: "0 20px", maxWidth: "7.5in", margin: "0 auto" }}>
       <style>{PRINT_STYLES}</style>
 
       {/* Header */}
@@ -248,13 +247,30 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
     }, 400);
   };
 
+  const sharePDF = async () => {
+    setShowPreview(true);
+    await new Promise(r => setTimeout(r, 400));
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Invoice #${form.invoice_number}`,
+          text: `Invoice #${form.invoice_number} — ${form.contractor_name}\nProperty: ${form.job_address || (property ? property.address : "N/A")}\nDate: ${form.date}`,
+        });
+      } catch {
+        // User cancelled share
+      }
+    } else {
+      // Fallback to print
+      window.print();
+    }
+    setTimeout(() => setShowPreview(false), 1000);
+  };
+
   return (
     <>
-      {showPreview && (
-        <div style={{ position: "fixed", left: -9999, top: 0 }}>
-          <InvoicePrint invoice={form} property={property} />
-        </div>
-      )}
+      <div id="invoice-print-wrapper" style={{ display: showPreview ? "block" : "none", position: "fixed", left: 0, top: 0, width: "100%", zIndex: -1 }}>
+        <InvoicePrint invoice={form} property={property} />
+      </div>
       <Modal title="" onClose={onClose} wide>
         {/* Invoice number header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
@@ -357,6 +373,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Btn v="ghost" onClick={onClose}>Cancel</Btn>
           <Btn onClick={printPDF} v="ghost" style={{ flex: 1 }}>📄 Download PDF</Btn>
+          <Btn onClick={sharePDF} v="ghost" style={{ flex: 1 }}>📤 Share</Btn>
           <Btn onClick={save} style={{ flex: 1 }} v="success">{saving ? "Saving..." : "Save Invoice"}</Btn>
         </div>
         <div style={{ marginTop: 12 }}>
