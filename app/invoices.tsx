@@ -26,7 +26,7 @@ interface Invoice {
   id: string; property_id: string | null; invoice_number: number; date: string;
   status: string; contractor_name: string; contractor_address: string;
   contractor_phone: string; contractor_email: string;
-  sections: Section[]; notes: string; created_at: string;
+  sections: Section[]; notes: string; job_address: string; created_at: string;
 }
 interface Settings { name: string; address: string; phone: string; email: string; payment_info: string; }
 
@@ -113,7 +113,7 @@ function InvoicePrint({ invoice, property }: { invoice: Invoice; property: Prope
 
       {/* Property */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>Property Address: <span style={{ fontWeight: 400 }}>{property ? `${property.address}, ${property.city}` : ""}</span></div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Property Address: <span style={{ fontWeight: 400 }}>{invoice.job_address || (property ? `${property.address}, ${property.city}` : "")}</span></div>
       </div>
 
       {/* Table */}
@@ -212,6 +212,7 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
       date: form.date, contractor_name: form.contractor_name, contractor_address: form.contractor_address,
       contractor_phone: form.contractor_phone, contractor_email: form.contractor_email,
       sections: JSON.stringify(form.sections), notes: form.notes, status: form.status,
+      job_address: form.job_address || "",
     }).eq("id", form.id);
     onSave(form);
     setSaving(false);
@@ -235,9 +236,14 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
           <Field label="Your Phone" value={form.contractor_phone} onChange={(e) => setForm(f => ({ ...f, contractor_phone: e.target.value }))} />
           <Field label="Your Email" value={form.contractor_email} onChange={(e) => setForm(f => ({ ...f, contractor_email: e.target.value }))} />
           <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12 }}>
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", fontSize: 14, color: C.text, width: "100%", boxSizing: "border-box" as const }}>
-              <span style={{ color: C.muted, fontSize: 11 }}>PROPERTY</span><br />
-              <span style={{ color: property ? C.text : C.muted }}>{property ? `${property.address}, ${property.city}` : "No property linked"}</span>
+            <div style={{ width: "100%" }}>
+              <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 5, letterSpacing: 0.8, textTransform: "uppercase" }}>Property / Job Address</label>
+              <input
+                value={form.job_address || (property ? `${property.address}, ${property.city}` : "")}
+                onChange={(e) => setForm(f => ({ ...f, job_address: e.target.value }))}
+                placeholder="e.g. 123 Main St, Gary, IN"
+                style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }}
+              />
             </div>
           </div>
         </div>
@@ -391,6 +397,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
       contractor_email: settings.email,
       sections: JSON.stringify(DEFAULT_SECTIONS),
       notes: settings.payment_info,
+      job_address: "",
     }).select().single();
     if (data) {
       // Get proper sequential number
