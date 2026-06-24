@@ -23,7 +23,7 @@ const today = () => new Date().toISOString().split("T")[0];
 interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
 interface ScopeItem {
   id: string; property_id: string; description: string; cost: number; labor: number;
-  completed: boolean; excluded_from_invoice: boolean; sort_order: number; is_paint?: boolean;
+  completed: boolean; excluded_from_invoice: boolean; sort_order: number; is_paint?: boolean; materials_purchased?: boolean;
 }
 interface MileageLog { id: string; property_id: string; date: string; miles: number; note: string; }
 interface Log { id: string; contractor_id: string; property_id: string; hours: number; rate_override: number | null; date: string; paid: boolean; note: string; deductions: { title: string; amount: number }[]; }
@@ -33,6 +33,7 @@ interface Advance { id: string; contractor_id: string; amount: number; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isPaint = (desc: string) => /paint|painting|primer|stain|finish coat/i.test(desc);
+const isPMFee = (desc: string) => /property management fee|pm fee|management fee/i.test(desc);
 const netAmt = (log: Log, rate: number) => {
   const r = log.rate_override != null ? Number(log.rate_override) : rate;
   const gross = Number(log.hours) * r;
@@ -80,8 +81,8 @@ function PropertyPL({ property, scopeItems, logs, contractors, expenses, advance
   const pExpenses = expenses.filter(e => e.property_id === property.id);
   const pMileage = mileageLogs.filter(m => m.property_id === property.id);
 
-  // Expected revenue = ALL scope items (not just completed), paint labor counts but paint cost excluded
-  const expectedRevenue = scopeItems.filter(i => !i.excluded_from_invoice).reduce((s, i) => {
+  // Expected revenue = ALL scope items, paint labor counts but paint cost excluded, PM fee fully excluded
+  const expectedRevenue = scopeItems.filter(i => !i.excluded_from_invoice && !isPMFee(i.description)).reduce((s, i) => {
     const paintItem = isPaint(i.description);
     return s + (paintItem ? Number(i.labor) : Number(i.cost) + Number(i.labor));
   }, 0);
@@ -267,7 +268,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           cost: Number(item.cost) || 0,
           labor: Number(item.labor) || 0,
           completed: false,
-          excluded_from_invoice: isPaint(item.description || ""),
+          excluded_from_invoice: isPMFee(item.description || ""),
           sort_order: (items.length + idx),
         }));
         const { data, error } = await supabase.from("scope_items").insert(rows).select();
@@ -282,11 +283,11 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
 
   const addItem = async () => {
     if (!newItem.description) return;
-    const paint = isPaint(newItem.description);
+    const pmFee = isPMFee(newItem.description);
     const { data } = await supabase.from("scope_items").insert({
       property_id: property.id, description: newItem.description,
       cost: parseFloat(newItem.cost) || 0, labor: parseFloat(newItem.labor) || 0,
-      completed: false, excluded_from_invoice: paint,
+      completed: false, excluded_from_invoice: pmFee,
       sort_order: items.length,
     }).select().single();
     if (data) setItems(prev => [...prev, data]);
@@ -302,6 +303,11 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
   const toggleExclude = async (item: ScopeItem) => {
     await supabase.from("scope_items").update({ excluded_from_invoice: !item.excluded_from_invoice }).eq("id", item.id);
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, excluded_from_invoice: !i.excluded_from_invoice } : i));
+  };
+
+  const toggleMatPurchased = async (item: ScopeItem) => {
+    await supabase.from("scope_items").update({ materials_purchased: !item.materials_purchased }).eq("id", item.id);
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, materials_purchased: !i.materials_purchased } : i));
   };
 
   const removeItem = async (id: string) => {
@@ -446,8 +452,15 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
                 <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
                   {Number(item.cost) > 0 && <span style={{ fontSize: 12, color: C.muted }}>Materials: {$$(Number(item.cost))}</span>}
                   {Number(item.labor) > 0 && <span style={{ fontSize: 12, color: C.muted }}>Labor: {$$(Number(item.labor))}</span>}
-                  {paint && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>🎨 paint — excluded from invoice</span>}
-                  {!paint && excluded && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>excluded</span>}
+                  {paint && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>🎨 paint cost excluded · labor counts</span>}
+                  {isPMFee(item.description) && <span style={{ fontSize: 11, color: C.red, background: C.redGlow, borderRadius: 4, padding: "1px 6px" }}>💼 PM fee — excluded from invoice</span>}
+                  {!paint && !isPMFee(item.description) && excluded && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>excluded</span>}
+                  {Number(item.cost) > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); toggleMatPurchased(item); }}
+                      style={{ fontSize: 11, color: item.materials_purchased ? C.green : C.muted, background: item.materials_purchased ? C.greenGlow : C.surface, border: `1px solid ${item.materials_purchased ? C.green + "44" : C.border}`, borderRadius: 4, padding: "1px 8px", cursor: "pointer", fontWeight: item.materials_purchased ? 700 : 400 }}>
+                      {item.materials_purchased ? "🛒 Materials bought" : "🛒 Mark materials bought"}
+                    </button>
+                  )}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -484,7 +497,8 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
                 style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
             </div>
           </div>
-          {isPaint(newItem.description) && <div style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 8, padding: "8px 12px", marginTop: 8, fontSize: 12, color: C.yellow }}>🎨 Paint item — will be excluded from invoice totals automatically</div>}
+          {isPaint(newItem.description) && <div style={{ background: C.yellowGlow, border: `1px solid ${C.yellow}44`, borderRadius: 8, padding: "8px 12px", marginTop: 8, fontSize: 12, color: C.yellow }}>🎨 Paint item — paint cost excluded from invoice, labor still counts</div>}
+          {isPMFee(newItem.description) && <div style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 12px", marginTop: 8, fontSize: 12, color: C.red }}>💼 Property management fee — will be fully excluded from invoice</div>}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
             <Btn v="ghost" onClick={() => setShowAddItem(false)}>Cancel</Btn>
             <Btn onClick={addItem}>Add Item</Btn>
