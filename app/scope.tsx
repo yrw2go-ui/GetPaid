@@ -23,7 +23,7 @@ const today = () => new Date().toISOString().split("T")[0];
 interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
 interface ScopeItem {
   id: string; property_id: string; description: string; cost: number; labor: number;
-  completed: boolean; excluded_from_invoice: boolean; sort_order: number; is_paint?: boolean; materials_purchased?: boolean;
+  completed: boolean; excluded_from_invoice: boolean; sort_order: number; is_paint?: boolean; materials_purchased?: boolean; notes?: string;
 }
 interface MileageLog { id: string; property_id: string; date: string; miles: number; note: string; }
 interface Log { id: string; contractor_id: string; property_id: string; hours: number; rate_override: number | null; date: string; paid: boolean; note: string; deductions: { title: string; amount: number }[]; }
@@ -318,7 +318,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
 
   const saveEditItem = async () => {
     if (!editItem) return;
-    await supabase.from("scope_items").update({ description: editItem.description, cost: editItem.cost, labor: editItem.labor }).eq("id", editItem.id);
+    await supabase.from("scope_items").update({ description: editItem.description, cost: editItem.cost, labor: editItem.labor, notes: editItem.notes || "" }).eq("id", editItem.id);
     setItems(prev => prev.map(i => i.id === editItem.id ? editItem : i));
     setEditItem(null);
   };
@@ -455,6 +455,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
                   {paint && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>🎨 paint cost excluded · labor counts</span>}
                   {isPMFee(item.description) && <span style={{ fontSize: 11, color: C.red, background: C.redGlow, borderRadius: 4, padding: "1px 6px" }}>💼 PM fee — excluded from invoice</span>}
                   {!paint && !isPMFee(item.description) && excluded && <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 4, padding: "1px 6px" }}>excluded</span>}
+                  {item.notes && <div style={{ fontSize: 12, color: C.accentLight, marginTop: 2, fontStyle: "italic" }}>📝 {item.notes}</div>}
                   {Number(item.cost) > 0 && (
                     <button onClick={(e) => { e.stopPropagation(); toggleMatPurchased(item); }}
                       style={{ fontSize: 11, color: item.materials_purchased ? C.green : C.muted, background: item.materials_purchased ? C.greenGlow : C.surface, border: `1px solid ${item.materials_purchased ? C.green + "44" : C.border}`, borderRadius: 4, padding: "1px 8px", cursor: "pointer", fontWeight: item.materials_purchased ? 700 : 400 }}>
@@ -525,6 +526,12 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
               <input type="number" value={editItem.labor} onChange={(e) => setEditItem(ei => ei ? { ...ei, labor: parseFloat(e.target.value) || 0 } : null)}
                 style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
             </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 5, letterSpacing: 0.8, textTransform: "uppercase" }}>Notes</label>
+            <textarea value={editItem.notes || ""} onChange={(e) => setEditItem(ei => ei ? { ...ei, notes: e.target.value } : null)}
+              placeholder="e.g. Waiting on delivery, used 3 boxes, see receipt #..."
+              style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const, minHeight: 60, resize: "vertical" }} />
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
             <Btn v="ghost" onClick={() => setEditItem(null)}>Cancel</Btn>
