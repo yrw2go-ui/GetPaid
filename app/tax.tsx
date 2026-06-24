@@ -38,7 +38,7 @@ export default function TaxTab({ properties }: { properties: Property[] }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [items, setItems] = useState<ExpenseItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sharing, setSharing] = useState(false);
+  const [sharing] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -149,93 +149,8 @@ export default function TaxTab({ properties }: { properties: Property[] }) {
 
   const sharePDF = async () => {
     setSharing(true);
-    try {
-      const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o: object) => {
-        setFontSize: (n: number) => void; setFont: (f: string, s: string) => void;
-        setFillColor: (r: number, g: number, b: number) => void;
-        setTextColor: (r: number, g: number, b: number) => void;
-        text: (t: string, x: number, y: number, o?: object) => void;
-        rect: (x: number, y: number, w: number, h: number, s: string) => void;
-        line: (x1: number, y1: number, x2: number, y2: number) => void;
-        splitTextToSize: (t: string, w: number) => string[];
-        output: (t: string) => Blob;
-        addPage: () => void;
-        internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
-      }};
-      const doc = new jsPDF({ unit: "in", format: "letter" });
-      const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-      const lm = 0.5; const pw = 7.5; let y = 0.5;
-
-      doc.setFontSize(18); doc.setFont("helvetica", "bold");
-      doc.text("Tax Deductible Expenses", lm, y); y += 0.3;
-      doc.setFontSize(11); doc.setFont("helvetica", "normal");
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Tax Year ${year}`, lm, y); y += 0.15;
-      doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
-      doc.text(fmt(grandTotal), lm + pw, y, { align: "right" });
-      doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
-      doc.text("Total Deductible", lm + pw, y + 0.18, { align: "right" });
-      doc.setTextColor(0, 0, 0);
-      y += 0.5;
-
-      // Column headers
-      doc.setFontSize(9); doc.setFont("helvetica", "bold");
-      doc.line(lm, y, lm + pw, y); y += 0.05;
-      doc.text("Item", lm, y + 0.14);
-      doc.text("SKU", lm + 2.8, y + 0.14);
-      doc.text("Store", lm + 3.8, y + 0.14);
-      doc.text("Property", lm + 5.0, y + 0.14);
-      doc.text("Amount", lm + pw, y + 0.14, { align: "right" });
-      y += 0.22; doc.line(lm, y, lm + pw, y); y += 0.1;
-
-      for (const { cat, total, items: catItems } of categoryTotals) {
-        if (y > 10) { doc.addPage(); y = 0.5; }
-        doc.setFontSize(10); doc.setFont("helvetica", "bold");
-        doc.setFillColor(243, 244, 246);
-        doc.rect(lm, y - 0.05, pw, 0.26, "F");
-        doc.text(cat, lm + 0.05, y + 0.14);
-        doc.text(fmt(total), lm + pw, y + 0.14, { align: "right" });
-        y += 0.28;
-        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
-        for (const item of catItems) {
-          if (y > 10) { doc.addPage(); y = 0.5; }
-          const exp = expenses.find(e => e.id === item.expense_id);
-          const _prop = exp ? getProperty(exp?.property_id) : null;
-          const itemName = item.name.length > 35 ? item.name.substring(0, 35) + "..." : item.name;
-          doc.text(itemName, lm + 0.15, y + 0.12);
-          doc.setTextColor(120, 120, 120);
-          doc.text(item.sku || "—", lm + 2.8, y + 0.12);
-          doc.setTextColor(0, 0, 0);
-          doc.text(exp?.store || "—", lm + 3.8, y + 0.12);
-          doc.setTextColor(120, 120, 120);
-          doc.text(prop ? prop.address.substring(0, 18) : (exp?.date || "—"), lm + 5.0, y + 0.12);
-          doc.setTextColor(0, 0, 0);
-          doc.text(fmt(Number(item.price) * Number(item.qty)), lm + pw, y + 0.12, { align: "right" });
-          y += 0.22;
-        }
-      }
-
-      // Grand total
-      y += 0.1; doc.line(lm, y, lm + pw, y); y += 0.05;
-      doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.text("TOTAL TAX DEDUCTIBLE", lm, y + 0.16);
-      doc.text(fmt(grandTotal), lm + pw, y + 0.16, { align: "right" });
-
-      const pdfBlob = doc.output("blob");
-      const fileName = `Tax-Deductions-${year}.pdf`;
-      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: `Tax Deductions ${year}`, files: [file] });
-      } else {
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement("a");
-        a.href = url; a.download = fileName;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    } catch (e) { console.error(e); downloadPDF(); }
+    // Open print window — user can save as PDF then share from files
+    downloadPDF();
     setSharing(false);
   };
 
