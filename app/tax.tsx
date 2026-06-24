@@ -200,9 +200,9 @@ export default function TaxTab({ properties }: { properties: Property[] }) {
         for (const item of catItems) {
           if (y > 10) { doc.addPage(); y = 0.5; }
           const exp = expenses.find(e => e.id === item.expense_id);
-          const prop = exp ? getProperty(exp?.property_id) : null;
-          const nameLines = doc.splitTextToSize(item.name, 2.6);
-          doc.text(nameLines, lm + 0.15, y + 0.12);
+          const _prop = exp ? getProperty(exp?.property_id) : null;
+          const itemName = item.name.length > 35 ? item.name.substring(0, 35) + "..." : item.name;
+          doc.text(itemName, lm + 0.15, y + 0.12);
           doc.setTextColor(120, 120, 120);
           doc.text(item.sku || "—", lm + 2.8, y + 0.12);
           doc.setTextColor(0, 0, 0);
@@ -211,7 +211,7 @@ export default function TaxTab({ properties }: { properties: Property[] }) {
           doc.text(prop ? prop.address.substring(0, 18) : (exp?.date || "—"), lm + 5.0, y + 0.12);
           doc.setTextColor(0, 0, 0);
           doc.text(fmt(Number(item.price) * Number(item.qty)), lm + pw, y + 0.12, { align: "right" });
-          y += 0.2 * Math.max(1, nameLines.length);
+          y += 0.22;
         }
       }
 
