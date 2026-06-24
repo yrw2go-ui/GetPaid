@@ -38,7 +38,7 @@ export default function TaxTab({ properties }: { properties: Property[] }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [items, setItems] = useState<ExpenseItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sharing] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => { load(); }, []);
 
