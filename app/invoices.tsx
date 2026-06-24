@@ -314,123 +314,91 @@ function InvoiceEditor({ invoice, property, settings, onSave, onClose, onDelete 
   };
 
   const sharePDF = async () => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const jspdfModule = await import("jspdf" as any);
-      const JsPDF = jspdfModule.jsPDF || jspdfModule.default;
-      const doc = new JsPDF({ unit: "in", format: "letter" });
-      const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-      const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
-      const lm = 0.5; // left margin
-      const pw = 7.5; // page width
-      let y = 0.5;
-
-      // Contractor info box
-      doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.rect(lm, y, 2.8, 0.9);
-      doc.text(form.contractor_name || "CONTRACTOR NAME", lm + 1.4, y + 0.22, { align: "center" });
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-      doc.text(form.contractor_address || "", lm + 1.4, y + 0.40, { align: "center" });
-      doc.text(form.contractor_phone || "", lm + 1.4, y + 0.55, { align: "center" });
-      doc.text(form.contractor_email || "", lm + 1.4, y + 0.70, { align: "center" });
-
-      // Date + Invoice number
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-      doc.text(`Date: ${form.date}`, pw + lm, y + 0.2, { align: "right" });
-      doc.text(`Invoice #: ${form.invoice_number}`, pw + lm, y + 0.4, { align: "right" });
-      y += 1.1;
-
-      // Property address
-      doc.setFont("helvetica", "bold"); doc.setFontSize(11);
-      doc.text("Property Address: ", lm, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(propAddr, lm + 1.35, y);
-      y += 0.35;
-
-      // Table header
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-      doc.line(lm, y, pw + lm, y);
-      y += 0.05;
-      doc.text("Description", lm, y + 0.15);
-      doc.text("Material Costs", lm + 3.8, y + 0.15, { align: "right" });
-      doc.text("Labor", lm + 5.3, y + 0.15, { align: "right" });
-      // Grey total header box
-      doc.setFillColor(136, 136, 136);
-      doc.rect(lm + 5.5, y, 2, 0.28, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.text("Total", lm + 6.5, y + 0.18, { align: "center" });
-      doc.setTextColor(0, 0, 0);
-      y += 0.32;
-      doc.line(lm, y, pw + lm, y);
-      y += 0.1;
-
-      // Sections
-      const activeSections = form.sections.filter(s => s.items.length > 0);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-      for (const sec of activeSections) {
-        doc.setFont("helvetica", "bold");
-        doc.text(`${sec.name}:`, lm, y + 0.12);
-        doc.setFont("helvetica", "normal");
-        y += 0.25;
-        for (const item of sec.items) {
-          const itemTotal = Number(item.materials) + Number(item.labor);
-          const descLines = doc.splitTextToSize(item.description, 3.5);
-          doc.text(descLines, lm + 0.15, y + 0.12);
-          if (Number(item.materials) > 0) doc.text(fmt(Number(item.materials)), lm + 3.8, y + 0.12, { align: "right" });
-          if (Number(item.labor) > 0) doc.text(fmt(Number(item.labor)), lm + 5.3, y + 0.12, { align: "right" });
-          doc.setFillColor(136, 136, 136);
-          doc.rect(lm + 5.5, y - 0.03, 2, 0.23, "F");
-          doc.setTextColor(255, 255, 255);
-          doc.text(fmt(itemTotal), lm + 6.5, y + 0.12, { align: "center" });
-          doc.setTextColor(0, 0, 0);
-          y += 0.22 * Math.max(1, descLines.length);
-        }
-      }
-
-      // Totals row
-      y += 0.1;
-      doc.line(lm, y, pw + lm, y);
-      y += 0.05;
-      doc.setFont("helvetica", "bolditalic");
-      doc.text("above work has been completed", lm, y + 0.15);
-      doc.setFont("helvetica", "bold");
-      doc.text(fmt(grandMaterials), lm + 3.8, y + 0.15, { align: "right" });
-      doc.text(fmt(grandLabor), lm + 5.3, y + 0.15, { align: "right" });
-      doc.setFillColor(136, 136, 136);
-      doc.rect(lm + 5.5, y, 2, 0.28, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bolditalic");
-      doc.text(fmt(grandTotal), lm + 6.5, y + 0.18, { align: "center" });
-      doc.setTextColor(0, 0, 0);
-      y += 0.4;
-
-      // Notes
-      if (form.notes) {
-        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-        doc.text(form.notes, lm, y + 0.15);
-      }
-
-      const pdfBlob = doc.output("blob");
-      const fileName = `Invoice-${form.invoice_number}.pdf`;
-
-      // Try native file share first
-      const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: `Invoice #${form.invoice_number}`, files: [file] });
-      } else {
-        // Download PDF — user can then share from their files app
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement("a");
-        a.href = url; a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    } catch (e) {
-      console.error("Share failed:", e);
-      printPDF();
+    // Generate invoice in new window — user saves as PDF then shares from files
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(buildInvoiceHTML());
+      win.document.close();
     }
+  };
+
+  const buildInvoiceHTML = () => {
+    const secs = form.sections.filter(s => s.items.length > 0);
+    const grandMat = form.sections.reduce((s, sec) => s + sec.items.reduce((si, i) => si + Number(i.materials), 0), 0);
+    const grandLab = form.sections.reduce((s, sec) => s + sec.items.reduce((si, i) => si + Number(i.labor), 0), 0);
+    const grandTot = grandMat + grandLab;
+    const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+    const propAddr = form.job_address || (property ? `${property.address}, ${property.city}` : "");
+
+    const rows = secs.map(sec => `
+      <tr><td colspan="4" style="padding:10px 8px 4px;font-weight:700;font-size:14px">${sec.name}:</td></tr>
+      ${sec.items.map(item => `
+        <tr>
+          <td style="padding:4px 8px 4px 20px">${item.description}</td>
+          <td style="text-align:right;padding:4px 8px">${Number(item.materials) > 0 ? fmt(Number(item.materials)) : ""}</td>
+          <td style="text-align:right;padding:4px 8px">${Number(item.labor) > 0 ? fmt(Number(item.labor)) : ""}</td>
+          <td style="text-align:right;padding:4px 8px;background:#888;color:#fff">${fmt(Number(item.materials)+Number(item.labor))}</td>
+        </tr>`).join("")}
+    `).join("");
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; color: #000; margin: 0; padding: 0.5in; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        @page { margin: 0.5in; size: 8.5in 11in; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+        <div style="border:2px solid #000;padding:10px 16px;width:220px;text-align:center">
+          <div style="font-weight:700;font-size:14px">${form.contractor_name || "CONTRACTOR NAME"}</div>
+          <div style="font-size:12px;margin-top:3px">${form.contractor_address || "ADDRESS"}</div>
+          <div style="font-size:12px">${form.contractor_phone || "PHONE"}</div>
+          <div style="font-size:12px">${form.contractor_email || "EMAIL"}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px"><strong>Date:</strong> ${form.date}</div>
+          <div style="font-size:13px;margin-top:6px"><strong>Invoice #:</strong> ${form.invoice_number}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;font-size:14px">
+        <strong>Property Address:</strong> ${propAddr}
+      </div>
+      <table>
+        <thead>
+          <tr style="border-bottom:2px solid #000">
+            <th style="text-align:left;padding:6px 8px;width:50%;text-decoration:underline">Description</th>
+            <th style="text-align:right;padding:6px 8px;text-decoration:underline">Material Costs</th>
+            <th style="text-align:right;padding:6px 8px;text-decoration:underline">Labor</th>
+            <th style="text-align:right;padding:6px 8px;background:#888;color:#fff;text-decoration:underline">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+          <tr style="border-top:2px solid #000">
+            <td style="padding:10px 8px;font-weight:700;font-style:italic">above work has been completed</td>
+            <td style="text-align:right;padding:10px 8px;font-weight:700">${fmt(grandMat)}</td>
+            <td style="text-align:right;padding:10px 8px;font-weight:700">${fmt(grandLab)}</td>
+            <td style="text-align:right;padding:10px 8px;background:#888;color:#fff;font-weight:700;font-style:italic">${fmt(grandTot)}</td>
+          </tr>
+        </tbody>
+      </table>
+      ${form.notes ? `<div style="margin-top:24px;font-size:13px">${form.notes}</div>` : ""}
+      <script>window.onload = () => { window.print(); }<\/script>
+    </body></html>`;
+  };
+
+  const printPDF = () => {
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(buildInvoiceHTML());
+      win.document.close();
+    }
+  };
+
+  const sharePDF = async () => {
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(buildInvoiceHTML()); win.document.close(); }
   };
 
   return (
