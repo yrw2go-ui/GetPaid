@@ -654,6 +654,49 @@ function ContractorDetail({ contractor, logs, properties, advances, onBack, onTo
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function GetPaid() {
+  const [locked, setLocked] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("gp_locked") === "true";
+    return false;
+  });
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [showUnlock, setShowUnlock] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinSetupStep, setPinSetupStep] = useState<"enter"|"confirm">("enter");
+  const [pinSetupFirst, setPinSetupFirst] = useState("");
+
+  const getPin = () => typeof window !== "undefined" ? localStorage.getItem("gp_pin") || "" : "";
+
+  const lockApp = () => {
+    if (!getPin()) { setShowPinSetup(true); return; }
+    setLocked(true);
+    if (typeof window !== "undefined") localStorage.setItem("gp_locked", "true");
+  };
+
+  const unlockApp = () => {
+    const pin = getPin();
+    if (pinInput === pin) {
+      setLocked(false);
+      setPinInput(""); setPinError("");
+      setShowUnlock(false);
+      if (typeof window !== "undefined") localStorage.setItem("gp_locked", "false");
+    } else {
+      setPinError("Wrong PIN"); setPinInput("");
+    }
+  };
+
+  const savePin = () => {
+    if (pinSetupStep === "enter") {
+      if (pinInput.length < 4) { setPinError("PIN must be 4 digits"); return; }
+      setPinSetupFirst(pinInput); setPinInput(""); setPinError(""); setPinSetupStep("confirm");
+    } else {
+      if (pinInput !== pinSetupFirst) { setPinError("PINs don't match"); setPinInput(""); return; }
+      if (typeof window !== "undefined") localStorage.setItem("gp_pin", pinInput);
+      setPinInput(""); setPinError(""); setShowPinSetup(false); setPinSetupStep("enter");
+      lockApp();
+    }
+  };
+
   const [tab, setTab] = useState(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
@@ -851,23 +894,26 @@ export default function GetPaid() {
   const lNet = Math.max(0, lGross - lDedTotal);
 
   const resetTab = (id: string) => {
+    const sensitiveTabs = ["dashboard", "contractors", "logs", "1099", "invoices", "tax"];
+    if (locked && sensitiveTabs.includes(id)) return;
     setTab(id);
     setSelectedProperty(null);
     setSelectedContractor(null);
     if (typeof window !== "undefined") window.location.hash = id;
   };
 
-  const TABS = [
-    { id: "dashboard", label: "Dashboard", icon: "⚡" },
-    { id: "contractors", label: "Crew", icon: "👷" },
-    { id: "properties", label: "Properties", icon: "🏠" },
-    { id: "logs", label: "Hours", icon: "🕐" },
-    { id: "1099", label: "1099", icon: "📋" },
-    { id: "expenses", label: "Expenses", icon: "🧾" },
-    { id: "invoices", label: "Invoices", icon: "📄" },
-    { id: "scope", label: "Scope", icon: "📋" },
-    { id: "tax", label: "Tax", icon: "💼" },
+  const ALL_TABS = [
+    { id: "dashboard", label: "Dashboard", icon: "⚡", sensitive: true },
+    { id: "contractors", label: "Crew", icon: "👷", sensitive: true },
+    { id: "properties", label: "Properties", icon: "🏠", sensitive: false },
+    { id: "logs", label: "Hours", icon: "🕐", sensitive: true },
+    { id: "1099", label: "1099", icon: "📋", sensitive: true },
+    { id: "expenses", label: "Expenses", icon: "🧾", sensitive: false },
+    { id: "invoices", label: "Invoices", icon: "📄", sensitive: true },
+    { id: "scope", label: "Scope", icon: "📋", sensitive: false },
+    { id: "tax", label: "Tax", icon: "💼", sensitive: true },
   ];
+  const TABS = locked ? ALL_TABS.filter(t => !t.sensitive) : ALL_TABS;
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
@@ -895,6 +941,10 @@ export default function GetPaid() {
                 <span>{t.icon}</span><span>{t.label}</span>
               </button>
             ))}
+            <button onClick={() => locked ? setShowUnlock(true) : lockApp()}
+              style={{ background: locked ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)", border: `1px solid ${locked ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)"}`, borderRadius: 8, padding: "6px 12px", color: locked ? "#ef4444" : "#10b981", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, marginLeft: 4 }}>
+              {locked ? "🔒 Locked" : "🔓 Lock"}
+            </button>
           </div>
         </div>
       </div>
@@ -1221,6 +1271,51 @@ export default function GetPaid() {
             <Btn onClick={addProperty}>Add</Btn>
           </div>
         </Modal>
+      )}
+
+      {/* Lock / PIN modals */}
+      {showUnlock && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 24 }}>
+          <div style={{ background: "#1a1a24", border: "1px solid #2a2a3a", borderRadius: 16, padding: 32, width: "100%", maxWidth: 340, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+            <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>App Locked</div>
+            <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 24 }}>Enter your PIN to unlock</div>
+            <input type="password" inputMode="numeric" maxLength={4} placeholder="••••" value={pinInput}
+              onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "")); setPinError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && unlockApp()}
+              autoFocus
+              style={{ width: "100%", background: "#13131a", border: `1px solid ${pinError ? "#ef4444" : "#2a2a3a"}`, borderRadius: 10, padding: "14px", color: "#f1f1f3", fontSize: 24, outline: "none", textAlign: "center", letterSpacing: 8, boxSizing: "border-box" as const, marginBottom: 8 }} />
+            {pinError && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>⚠️ {pinError}</div>}
+            <button onClick={unlockApp}
+              style={{ width: "100%", background: "#7c3aed", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              Unlock
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPinSetup && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 24 }}>
+          <div style={{ background: "#1a1a24", border: "1px solid #2a2a3a", borderRadius: 16, padding: 32, width: "100%", maxWidth: 340, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
+            <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Set a PIN</div>
+            <div style={{ color: "#9ca3af", fontSize: 14, marginBottom: 24 }}>
+              {pinSetupStep === "enter" ? "Choose a 4-digit PIN to lock the app" : "Confirm your PIN"}
+            </div>
+            <input type="password" inputMode="numeric" maxLength={4} placeholder="••••" value={pinInput}
+              onChange={(e) => { setPinInput(e.target.value.replace(/\D/g, "")); setPinError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && savePin()}
+              autoFocus
+              style={{ width: "100%", background: "#13131a", border: `1px solid ${pinError ? "#ef4444" : "#2a2a3a"}`, borderRadius: 10, padding: "14px", color: "#f1f1f3", fontSize: 24, outline: "none", textAlign: "center", letterSpacing: 8, boxSizing: "border-box" as const, marginBottom: 8 }} />
+            {pinError && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 8 }}>⚠️ {pinError}</div>}
+            <button onClick={savePin}
+              style={{ width: "100%", background: "#7c3aed", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              {pinSetupStep === "enter" ? "Next" : "Set PIN & Lock"}
+            </button>
+            <button onClick={() => { setShowPinSetup(false); setPinInput(""); setPinError(""); setPinSetupStep("enter"); }}
+              style={{ background: "none", border: "none", color: "#6b7280", fontSize: 13, cursor: "pointer", marginTop: 14 }}>Cancel</button>
+          </div>
+        </div>
       )}
 
       {showLog && (
