@@ -43,6 +43,14 @@ Extract all data and return ONLY valid JSON with no markdown, no backticks, no e
   ]
 }
 
+CRITICAL PRICE RULES:
+- "price" must ALWAYS be the UNIT price (price per single item), never the line total
+- If receipt shows "2 @7.29  14.58" then qty=2, price=7.29 (NOT 14.58)
+- If receipt shows "3 @5.26  15.78" then qty=3, price=5.26 (NOT 15.78)
+- If receipt shows a single item with no quantity, qty=1 and price=the shown amount
+- price × qty should equal the line total on the receipt
+- The sum of all (price × qty) should approximately equal the receipt subtotal
+
 Category rules: Tools = tax deductible business equipment. Materials/Hardware/Lumber/Flooring/Paint = capital improvement, deductible. Appliances = usually deductible. Personal items = not deductible.
 
 Tax deductible: If purchased for rehab/rental property business, most items ARE deductible. Mark true for anything construction, repair, or renovation related. Mark false for food, personal items, or unclear.
