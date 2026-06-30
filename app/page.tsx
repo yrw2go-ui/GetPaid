@@ -712,6 +712,9 @@ export default function GetPaid() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
+  const [scopeItems, setScopeItems] = useState<{ id: string; property_id: string; cost: number; labor: number; excluded_from_invoice: boolean; description: string }[]>([]);
+  const [expenseItems, setExpenseItems] = useState<{ id: string; expense_id: string; price: number; qty: number }[]>([]);
+  const [expensesList, setExpensesList] = useState<{ id: string; property_id: string | null }[]>([]);
   const [showAddC, setShowAddC] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
   const [showLog, setShowLog] = useState(false);
@@ -726,15 +729,21 @@ export default function GetPaid() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [{ data: c }, { data: p }, { data: l }, { data: a }] = await Promise.all([
+      const [{ data: c }, { data: p }, { data: l }, { data: a }, { data: si }, { data: exps }, { data: ei }] = await Promise.all([
         supabase.from("contractors").select("*").order("created_at"),
         supabase.from("properties").select("*").order("created_at"),
         supabase.from("logs").select("*").order("date", { ascending: false }),
         supabase.from("advances").select("*").order("date", { ascending: false }),
+        supabase.from("scope_items").select("id,property_id,cost,labor,excluded_from_invoice,description"),
+        supabase.from("expenses").select("id,property_id"),
+        supabase.from("expense_items").select("id,expense_id,price,qty"),
       ]);
       setContractors(c || []);
       setProperties(p || []);
       setAdvances(a || []);
+      setScopeItems(si || []);
+      setExpensesList(exps || []);
+      setExpenseItems(ei || []);
       setLogs((l || []).map((log: Log) => ({
         ...log,
         deductions: Array.isArray(log.deductions) ? log.deductions : JSON.parse(log.deductions || "[]"),
@@ -851,21 +860,41 @@ export default function GetPaid() {
     };
   });
 
+  const isPaintDesc = (desc: string) => /paint|painting|primer|stain|finish coat/i.test(desc || "");
+
   const pSummary = properties.map((p) => {
     const pl = logs.filter((l) => l.property_id === p.id);
     const getRate = (l: Log) => contractors.find((c) => c.id === l.contractor_id)?.rate || 0;
+    const laborCost = pl.reduce((s, l) => s + netAmt(l, getRate(l)), 0);
+
+    const pScope = scopeItems.filter(s => s.property_id === p.id);
+    const expectedRevenue = pScope.filter(i => !i.excluded_from_invoice).reduce((s, i) => {
+      const isPaint = isPaintDesc(i.description);
+      return s + (isPaint ? Number(i.labor) : Number(i.cost) + Number(i.labor));
+    }, 0);
+
+    const pExpenseIds = new Set(expensesList.filter(e => e.property_id === p.id).map(e => e.id));
+    const expenseCost = expenseItems.filter(i => pExpenseIds.has(i.expense_id)).reduce((s, i) => s + Number(i.price) * Number(i.qty), 0);
+
+    const netProfit = expectedRevenue - laborCost - expenseCost;
+
     return {
       ...p,
       owed: pl.filter((l) => !l.paid).reduce((s, l) => s + netAmt(l, getRate(l)), 0),
       paid: pl.filter((l) => l.paid).reduce((s, l) => s + netAmt(l, getRate(l)), 0),
       hours: pl.reduce((s, l) => s + Number(l.hours), 0),
       count: pl.length,
+      expectedRevenue, laborCost, expenseCost, netProfit,
     };
   });
 
   const totalOwed = cSummary.reduce((s, c) => s + c.owed, 0);
   const totalPaid = cSummary.reduce((s, c) => s + c.paid, 0);
   const totalHours = logs.reduce((s, l) => s + Number(l.hours), 0);
+  const portfolioRevenue = pSummary.reduce((s, p) => s + p.expectedRevenue, 0);
+  const portfolioLabor = pSummary.reduce((s, p) => s + p.laborCost, 0);
+  const portfolioExpenses = pSummary.reduce((s, p) => s + p.expenseCost, 0);
+  const portfolioNetProfit = portfolioRevenue - portfolioLabor - portfolioExpenses;
 
   // 1099 data
   const tax1099 = contractors.map((con) => {
@@ -964,6 +993,17 @@ export default function GetPaid() {
               <StatCard label="Hours Logged" value={hrs(totalHours)} color={C.yellow} icon="⏱️" />
               <StatCard label="Crew" value={contractors.length} color={C.accentLight} icon="👷" />
             </div>
+            {!locked && (portfolioRevenue > 0 || portfolioLabor > 0 || portfolioExpenses > 0) && (
+              <div style={{ background: `linear-gradient(135deg, ${C.accent}15, ${C.accentGlow})`, border: `1px solid ${C.accent}44`, borderRadius: 14, padding: "20px 24px", marginBottom: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentLight, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Portfolio P&L — All Properties</div>
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                  <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Revenue</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{$$(portfolioRevenue)}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Labor</div><div style={{ fontSize: 18, fontWeight: 800, color: C.red }}>-{$$(portfolioLabor)}</div></div>
+                  <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Expenses</div><div style={{ fontSize: 18, fontWeight: 800, color: C.red }}>-{$$(portfolioExpenses)}</div></div>
+                  <div style={{ marginLeft: "auto" }}><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Net Profit</div><div style={{ fontSize: 24, fontWeight: 800, color: portfolioNetProfit >= 0 ? C.green : C.red }}>{$$(portfolioNetProfit)}</div></div>
+                </div>
+              </div>
+            )}
             <div style={{ marginBottom: 28, display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Btn onClick={() => setShowLog(true)} style={{ fontSize: 15, padding: "12px 28px" }}>+ Log Hours</Btn>
               <Btn v="ghost" onClick={() => resetTab("invoices")} style={{ fontSize: 15, padding: "12px 28px" }}>📄 Invoices</Btn>
@@ -976,12 +1016,12 @@ export default function GetPaid() {
                   onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.accent + "66")}
                   onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}>
                   <div style={{ width: 34, height: 34, borderRadius: 10, background: c.color + "22", border: `1px solid ${c.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: c.color, fontWeight: 800, fontSize: 13 }}>{initials(c.name)}</div>
-                  <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{$$(c.rate)}/hr &middot; {hrs(c.hours)}</div></div>
+                  <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div><div style={{ color: C.muted, fontSize: 12 }}>{locked ? "••••" : `${$$(c.rate)}/hr · ${hrs(c.hours)}`}</div></div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {c.owed > 0 && <Pill color={C.red} glow={C.redGlow}>Owes {$$(c.owed)}</Pill>}
-                    {c.advances > 0 && <Pill color={C.accentLight} glow={C.accentGlow}>💵 {$$(c.advances)}</Pill>}
-                    {c.paid > 0 && <Pill color={C.green} glow={C.greenGlow}>Paid {$$(c.paid)}</Pill>}
-                    {c.count === 0 && <Pill color={C.muted} glow="transparent">No logs</Pill>}
+                    {!locked && c.owed > 0 && <Pill color={C.red} glow={C.redGlow}>Owes {$$(c.owed)}</Pill>}
+                    {!locked && c.advances > 0 && <Pill color={C.accentLight} glow={C.accentGlow}>💵 {$$(c.advances)}</Pill>}
+                    {!locked && c.paid > 0 && <Pill color={C.green} glow={C.greenGlow}>Paid {$$(c.paid)}</Pill>}
+                    {!locked && c.count === 0 && <Pill color={C.muted} glow="transparent">No logs</Pill>}
                     <span style={{ color: C.accentLight, fontSize: 16 }}>›</span>
                   </div>
                 </div>
@@ -998,8 +1038,8 @@ export default function GetPaid() {
                   <div style={{ fontSize: 22 }}>🏠</div>
                   <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{p.address}</div><div style={{ color: C.muted, fontSize: 12 }}>{p.city} &middot; {p.count} entries &middot; {hrs(p.hours)}</div></div>
                   <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    {p.owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 15 }}>{$$(p.owed)}</div><div style={{ color: C.muted, fontSize: 11 }}>owed</div></div>}
-                    {p.paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 15 }}>{$$(p.paid)}</div><div style={{ color: C.muted, fontSize: 11 }}>paid</div></div>}
+                    {!locked && p.owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 15 }}>{$$(p.owed)}</div><div style={{ color: C.muted, fontSize: 11 }}>owed</div></div>}
+                    {!locked && p.paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 15 }}>{$$(p.paid)}</div><div style={{ color: C.muted, fontSize: 11 }}>paid</div></div>}
                     <span style={{ color: C.accentLight, fontSize: 18 }}>›</span>
                   </div>
                 </div>
@@ -1084,6 +1124,7 @@ export default function GetPaid() {
                           <div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>
                             <span onClick={(e) => e.stopPropagation()}><span style={{ cursor: "text" }} onClick={() => { const v = prompt("Edit city:", p.city); if (v) updateProperty(p.id, "city", v); }}>{p.city}</span></span>
                           </div>
+                          {!locked && (
                           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                             {assigned.map((c) => {
                               const cLogs = logs.filter(l => l.property_id === p.id && l.contractor_id === c.id);
@@ -1096,16 +1137,25 @@ export default function GetPaid() {
                             })}
                             {!assigned.length && <span style={{ color: C.muted, fontSize: 12 }}>No crew yet</span>}
                           </div>
+                          )}
                         </div>
                         <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                          {p.owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 18 }}>{$$(p.owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Owed</div></div>}
-                          {p.paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 18 }}>{$$(p.paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Paid</div></div>}
+                          {!locked && p.owed > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.red, fontWeight: 800, fontSize: 18 }}>{$$(p.owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Owed</div></div>}
+                          {!locked && p.paid > 0 && <div style={{ textAlign: "right" }}><div style={{ color: C.green, fontWeight: 800, fontSize: 18 }}>{$$(p.paid)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Paid</div></div>}
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <span style={{ color: C.accentLight, fontSize: 20 }}>›</span>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this property and all its logs?")) deleteProperty(p.id); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0 }}>🗑️</button>
+                            {!locked && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this property and all its logs?")) deleteProperty(p.id); }} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0 }}>🗑️</button>}
                           </div>
                         </div>
                       </div>
+                      {!locked && (p.expectedRevenue > 0 || p.laborCost > 0 || p.expenseCost > 0) && (
+                        <div style={{ display: "flex", gap: 16, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}`, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
+                          <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Revenue</div><div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{$$(p.expectedRevenue)}</div></div>
+                          <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Labor</div><div style={{ fontSize: 13, fontWeight: 700, color: C.red }}>-{$$(p.laborCost)}</div></div>
+                          <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Expenses</div><div style={{ fontSize: 13, fontWeight: 700, color: C.red }}>-{$$(p.expenseCost)}</div></div>
+                          <div style={{ marginLeft: "auto" }}><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Net Profit</div><div style={{ fontSize: 15, fontWeight: 800, color: p.netProfit >= 0 ? C.green : C.red }}>{$$(p.netProfit)}</div></div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1364,25 +1414,4 @@ export default function GetPaid() {
             ))}
             <div style={{ display: "flex", gap: 8 }}>
               <input placeholder="Item" value={lDedForm.title} onChange={(e) => setLDedForm({ ...lDedForm, title: e.target.value })} style={{ flex: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
-              <input placeholder="$0" type="number" value={lDedForm.amount} onChange={(e) => setLDedForm({ ...lDedForm, amount: e.target.value })} style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
-              <button onClick={() => { if (!lDedForm.title || !lDedForm.amount) return; setLDeds([...lDeds, lDedForm]); setLDedForm({ title: "", amount: "" }); }} style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 14px", color: C.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add</button>
-            </div>
-          </div>
-          {lGross > 0 && (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.sub, marginBottom: 4 }}><span>Gross ({lHours.toFixed(1)}h)</span><span>{$$(lGross)}</span></div>
-              {lDeds.map((d, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.red, marginBottom: 2 }}><span>- {d.title}</span><span>-{$$(parseFloat(d.amount) || 0)}</span></div>)}
-              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 15 }}>
-                <span style={{ color: C.text }}>Net Owed</span><span style={{ color: C.green }}>{$$(lNet)}</span>
-              </div>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Btn v="ghost" onClick={() => setShowLog(false)}>Cancel</Btn>
-            <Btn onClick={saveLog}>Save Entry</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
+              <input placeholder="$0" type="number" value={lDedForm.amount} onChange={(e) => setLDedForm({ ...lDedForm, amount: e.target.value })} style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13
