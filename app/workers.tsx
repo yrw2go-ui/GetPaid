@@ -19,7 +19,7 @@ const C = {
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 const hrs = (h: number) => `${Number(h).toFixed(1)}h`;
 
-interface Worker { id: string; name: string; email: string; rate: number; status: string; }
+interface Worker { id: string; name: string; email: string; rate: number; status: string; contractor_id?: string; }
 interface Submission { id: string; worker_id: string; hours: number; date: string; note: string; status: string; property_id: string; }
 interface Property { id: string; address: string; }
 
@@ -37,7 +37,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-export default function WorkersTab({ userId, properties }: { userId: string; properties: Property[] }) {
+export default function WorkersTab({ userId, properties, contractors }: { userId: string; properties: Property[]; contractors: { id: string; name: string; rate: number }[] }) {
   const [account, setAccount] = useState<{ id: string; plan: string } | null>(null);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -45,9 +45,11 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteContractorId, setInviteContractorId] = useState("");
   const [editWorker, setEditWorker] = useState<Worker | null>(null);
   const [tab, setTab] = useState<"workers"|"approvals">("approvals");
   const [copiedToken, setCopiedToken] = useState("");
+  const [approvalRates, setApprovalRates] = useState<Record<string, string>>({});
 
   useEffect(() => { load(); }, [userId]);
 
@@ -72,10 +74,12 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
     const token = Math.random().toString(36).substring(2, 10).toUpperCase();
     const { data } = await supabase.from("worker_invites").insert({
       account_id: account.id, email: inviteEmail, token, accepted: false,
+      contractor_id: inviteContractorId || null,
     }).select().single();
     if (data) {
       setInvites(prev => [data, ...prev]);
       setInviteEmail("");
+      setInviteContractorId("");
       setShowInvite(false);
       // Copy invite link
       const link = `${window.location.origin}/worker?invite=${token}`;
@@ -88,14 +92,17 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
   const approveSubmission = async (sub: Submission) => {
     const worker = workers.find(w => w.id === sub.worker_id);
     if (!worker) return;
-    // Create actual log entry
+    const rate = parseFloat(approvalRates[sub.id] || "0");
+    if (!rate || rate <= 0) { alert("Enter the pay rate for this job before approving."); return; }
+    // Create actual log entry with the per-job rate as rate_override
     await supabase.from("logs").insert({
-      contractor_id: null, property_id: sub.property_id,
+      contractor_id: worker.contractor_id || null, property_id: sub.property_id,
       hours: sub.hours, date: sub.date, note: sub.note,
-      paid: false, deductions: "[]", rate_override: null,
+      paid: false, deductions: "[]", rate_override: rate,
       user_id: userId,
     });
-    await supabase.from("hour_submissions").update({ status: "approved" }).eq("id", sub.id);
+    // Store the rate on the submission too so worker sees correct earnings
+    await supabase.from("hour_submissions").update({ status: "approved", rate_override: rate }).eq("id", sub.id);
     setSubmissions(prev => prev.filter(s => s.id !== sub.id));
   };
 
@@ -174,6 +181,17 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
                   <div style={{ color: C.yellow, fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>Pending</div>
                 </div>
               </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 5, letterSpacing: 0.8, textTransform: "uppercase" }}>Pay Rate for This Job ($/hr)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="number" placeholder="e.g. 20.00 for painting, 12.00 for cleanup" value={approvalRates[s.id] || ""}
+                    onChange={e => setApprovalRates(prev => ({ ...prev, [s.id]: e.target.value }))}
+                    style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
+                  {approvalRates[s.id] && Number(approvalRates[s.id]) > 0 && (
+                    <span style={{ fontSize: 13, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>= {$$(Number(s.hours) * Number(approvalRates[s.id]))}</span>
+                  )}
+                </div>
+              </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={() => approveSubmission(s)}
                   style={{ flex: 1, background: C.greenGlow, border: `1px solid ${C.green}44`, borderRadius: 8, padding: "10px", color: C.green, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
@@ -208,6 +226,7 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{w.name}</div>
                 <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{w.email} · {$$(w.rate)}/hr</div>
+                {w.contractor_id && <div style={{ fontSize: 11, color: C.accentLight, marginTop: 2 }}>🔗 Linked to {contractors.find(c => c.id === w.contractor_id)?.name || "crew member"}</div>}
               </div>
               <button onClick={() => setEditWorker({ ...w })}
                 style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 14px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -241,6 +260,15 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
         <Modal title="Invite Worker" onClose={() => setShowInvite(false)}>
           <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
             💡 We&apos;ll generate an invite link you can share with your worker. They&apos;ll use it to sign up for the worker portal at <strong>{typeof window !== "undefined" ? window.location.origin : ""}/worker</strong>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Link to Existing Crew Member</label>
+            <select value={inviteContractorId} onChange={e => setInviteContractorId(e.target.value)}
+              style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none" }}>
+              <option value="">New worker (not linked)</option>
+              {contractors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Their portal hours will flow into this crew member&apos;s card.</div>
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Worker&apos;s Email</label>
