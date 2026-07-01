@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import AuthPage from "./auth";
 import ExpensesTab from "./expenses";
 import InvoicesTab from "./invoices";
 import ScopeTab from "./scope";
@@ -667,6 +668,13 @@ export default function GetPaid() {
 
   const getPin = () => typeof window !== "undefined" ? localStorage.getItem("gp_pin") || "" : "";
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setContractors([]); setProperties([]); setLogs([]); setAdvances([]);
+    setScopeItems([]); setExpensesList([]); setExpenseItems([]);
+  };
+
   const lockApp = () => {
     if (!getPin()) { setShowPinSetup(true); return; }
     setLocked(true);
@@ -708,6 +716,8 @@ export default function GetPaid() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -725,10 +735,37 @@ export default function GetPaid() {
   const [lDedForm, setLDedForm] = useState({ title: "", amount: "" });
   const [taxYear, setTaxYear] = useState(new Date().getFullYear());
 
+  // Auth check
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email || "" });
+      }
+      setAuthChecked(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setUser({ id: session.user.id, email: session.user.email || "" });
+      else setUser(null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Load
   useEffect(() => {
+    if (!user) return;
     async function load() {
       setLoading(true);
+      // Migrate any existing data without user_id to this user (first-time login migration)
+      await Promise.all([
+        supabase.from("contractors").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("properties").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("logs").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("advances").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("expenses").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("invoices").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("scope_items").update({ user_id: user.id }).is("user_id", null),
+        supabase.from("mileage_logs").update({ user_id: user.id }).is("user_id", null),
+      ]);
       const [{ data: c }, { data: p }, { data: l }, { data: a }, { data: si }, { data: exps }, { data: ei }] = await Promise.all([
         supabase.from("contractors").select("*").order("created_at"),
         supabase.from("properties").select("*").order("created_at"),
@@ -751,7 +788,7 @@ export default function GetPaid() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [user]);
 
   // CRUD
   const addContractor = async () => {
@@ -944,6 +981,14 @@ export default function GetPaid() {
   ];
   const TABS = locked ? ALL_TABS.filter(t => !t.sensitive) : ALL_TABS;
 
+  if (!authChecked) return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontSize: 40 }}>💸</div>
+    </div>
+  );
+
+  if (!user) return <AuthPage onAuth={(u) => setUser(u)} />;
+
   if (loading) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
       <div style={{ fontSize: 40 }}>💸</div>
@@ -973,6 +1018,10 @@ export default function GetPaid() {
             <button onClick={() => locked ? setShowUnlock(true) : lockApp()}
               style={{ background: locked ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)", border: `1px solid ${locked ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)"}`, borderRadius: 8, padding: "6px 12px", color: locked ? "#ef4444" : "#10b981", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, marginLeft: 4 }}>
               {locked ? "🔒 Locked" : "🔓 Lock"}
+            </button>
+            <button onClick={signOut}
+              style={{ background: "transparent", border: "1px solid #2a2a3a", borderRadius: 8, padding: "6px 12px", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, marginLeft: 4 }}>
+              Sign Out
             </button>
           </div>
         </div>
