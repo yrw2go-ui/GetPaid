@@ -331,7 +331,7 @@ export default function WorkerPortal() {
                 style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box" as const}} />
             </div>
             <div style={{background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#f59e0b"}}>
-              ⏳ Hours will be submitted for your employer's approval before being counted.
+              ⏳ Hours will be submitted for your employer&apos;s approval before being counted.
             </div>
             <div style={{display:"flex",gap:10}}>
               <button onClick={() => setShowLog(false)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 18px",color:C.muted,fontSize:14,cursor:"pointer"}}>Cancel</button>
