@@ -1280,7 +1280,7 @@ export default function GetPaid() {
 
         {/* WORKERS */}
         {tab === "workers" && user && (
-          <WorkersTab userId={user.id} properties={properties} />
+          <WorkersTab userId={user.id} properties={properties} contractors={contractors} />
         )}
 
         {/* 1099 */}
