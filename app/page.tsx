@@ -5,6 +5,7 @@ import ExpensesTab from "./expenses";
 import InvoicesTab from "./invoices";
 import ScopeTab from "./scope";
 import TaxTab from "./tax";
+import WorkersTab from "./workers";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -1274,6 +1275,11 @@ export default function GetPaid() {
         {/* TAX */}
         {tab === "tax" && (
           <TaxTab properties={properties} />
+        )}
+
+        {/* WORKERS */}
+        {tab === "workers" && user && (
+          <WorkersTab userId={user.id} properties={properties} />
         )}
 
         {/* 1099 */}
