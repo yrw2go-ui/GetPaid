@@ -243,7 +243,7 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
             💡 We&apos;ll generate an invite link you can share with your worker. They'll use it to sign up for the worker portal at <strong>{typeof window !== "undefined" ? window.location.origin : ""}/worker</strong>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Worker's Email</label>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Worker&apos;s Email</label>
             <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
               placeholder="worker@example.com" onKeyDown={e => e.key === "Enter" && sendInvite()}
               style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
