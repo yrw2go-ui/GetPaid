@@ -473,6 +473,12 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
     await supabase.from("invoices").update({ status: "sent", sent_date: today }).eq("id", inv.id);
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", sent_date: today } : i));
   };
+
+  const markPaid = async (inv: Invoice) => {
+    const today = new Date().toISOString().split("T")[0];
+    await supabase.from("invoices").update({ status: "paid", paid_date: today }).eq("id", inv.id);
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "paid", paid_date: today } : i));
+  };
   const [filterProperty, setFilterProperty] = useState("all");
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -681,19 +687,24 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
                   <div style={{ fontWeight: 800, fontSize: 16, color: C.green }}>{$$(total)}</div>
                   <div style={{ fontSize: 11, color: inv.status === "paid" ? C.green : inv.status === "sent" ? C.accentLight : C.yellow, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>{inv.status}</div>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); markSent(inv); }}
-                  disabled={inv.status === "sent" || inv.status === "paid"}
-                  style={{
-                    background: (inv.status === "sent" || inv.status === "paid") ? C.surface : C.accent,
-                    border: `1px solid ${(inv.status === "sent" || inv.status === "paid") ? C.border : C.accent}`,
-                    borderRadius: 8, padding: "8px 14px",
-                    color: (inv.status === "sent" || inv.status === "paid") ? C.muted : "#fff",
-                    fontSize: 12, fontWeight: 700,
-                    cursor: (inv.status === "sent" || inv.status === "paid") ? "default" : "pointer",
-                    whiteSpace: "nowrap", flexShrink: 0,
-                  }}>
-                  {inv.status === "sent" ? "✓ Sent" : inv.status === "paid" ? "✓ Paid" : "Mark Sent"}
-                </button>
+                {inv.status === "draft" && (
+                  <button onClick={(e) => { e.stopPropagation(); markSent(inv); }}
+                    style={{ background: C.accent, border: `1px solid ${C.accent}`, borderRadius: 8, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Mark Sent
+                  </button>
+                )}
+                {inv.status === "sent" && (
+                  <button onClick={(e) => { e.stopPropagation(); markPaid(inv); }}
+                    style={{ background: C.green, border: `1px solid ${C.green}`, borderRadius: 8, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    Mark Paid
+                  </button>
+                )}
+                {inv.status === "paid" && (
+                  <button disabled
+                    style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.green, fontSize: 12, fontWeight: 700, cursor: "default", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    ✓ Paid
+                  </button>
+                )}
                 <span style={{ color: C.accentLight, fontSize: 18 }}>›</span>
               </div>
             </div>
