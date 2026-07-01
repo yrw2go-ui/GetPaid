@@ -50,7 +50,10 @@ function AuthScreen({ onAuth }: { onAuth: (u: { id: string; email: string }) => 
         const { data, error: err } = await supabase.auth.signUp({ email, password });
         if (err) throw err;
         if (data.user) {
-          await supabase.from("workers").insert({ account_id: invite.account_id, user_id: data.user.id, name, email, rate: 0, status: "active" });
+          await supabase.from("workers").insert({
+            account_id: invite.account_id, user_id: data.user.id, name, email,
+            rate: 0, status: "active", contractor_id: invite.contractor_id || null,
+          });
           await supabase.from("worker_invites").update({ accepted: true }).eq("id", invite.id);
           onAuth({ id: data.user.id, email: data.user.email || "" });
         }
@@ -172,7 +175,7 @@ export default function WorkerPortal() {
     const fmt = (n: number) => $$(n);
     const rows = approvedSubs.map(s => `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${s.date}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${getProperty(s.property_id)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${Number(s.hours).toFixed(1)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${fmt(Number(s.rate_override)||worker?.rate||0)}/hr</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${fmt(Number(s.hours)*(Number(s.rate_override)||worker?.rate||0))}</td></tr>`).join("");
     const win = window.open("","_blank");
-    if (win) { win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:0.5in;color:#000}table{width:100%;border-collapse:collapse}th{text-align:left;padding:8px 10px;border-bottom:2px solid #000;font-size:12px}@page{margin:0.5in;size:8.5in 11in}</style></head><body><div style="display:flex;justify-content:space-between;margin-bottom:24px"><div><h2 style="margin:0">Pay Statement</h2><div style="color:#666;font-size:13px">As of ${today()}</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:700">${fmt(totalEarned)}</div><div style="color:#666;font-size:12px">Total Earned</div></div></div><div style="margin-bottom:20px;font-size:14px"><strong>Worker:</strong> ${worker?.name}<br><strong>Rate:</strong> ${fmt(worker?.rate||0)}/hr</div><table><thead><tr><th>Date</th><th>Property</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="4" style="padding:10px;font-weight:700">Total</td><td style="padding:10px;font-weight:700;text-align:right">${fmt(totalEarned)}</td></tr></tfoot></table><script>window.onload=()=>window.print()<\/script></body></html>`); win.document.close(); }
+    if (win) { win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:0.5in;color:#000}table{width:100%;border-collapse:collapse}th{text-align:left;padding:8px 10px;border-bottom:2px solid #000;font-size:12px}@page{margin:0.5in;size:8.5in 11in}</style></head><body><div style="display:flex;justify-content:space-between;margin-bottom:24px"><div><h2 style="margin:0">Pay Statement</h2><div style="color:#666;font-size:13px">As of ${today()}</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:700">${fmt(totalEarned)}</div><div style="color:#666;font-size:12px">Total Earned</div></div></div><div style="margin-bottom:20px;font-size:14px"><strong>Worker:</strong> ${worker?.name}<br><strong>Rate:</strong> Varies by job</div><table><thead><tr><th>Date</th><th>Property</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="4" style="padding:10px;font-weight:700">Total</td><td style="padding:10px;font-weight:700;text-align:right">${fmt(totalEarned)}</td></tr></tfoot></table><script>window.onload=()=>window.print()<\/script></body></html>`); win.document.close(); }
   };
 
   if (!authChecked) return <div style={{ minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',sans-serif" }}><div style={{fontSize:40}}>💸</div></div>;
@@ -194,7 +197,7 @@ export default function WorkerPortal() {
           <div style={{fontSize:20}}>💸</div>
           <div style={{flex:1}}>
             <div style={{fontWeight:700,fontSize:14}}>{worker.name}</div>
-            <div style={{color:C.muted,fontSize:11}}>Worker Portal · {$$(worker.rate)}/hr</div>
+            <div style={{color:C.muted,fontSize:11}}>Worker Portal · Rate set per job</div>
           </div>
           <button onClick={signOut} style={{background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
         </div>
@@ -258,8 +261,8 @@ export default function WorkerPortal() {
                 <div style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",marginTop:3}}>This Week</div>
               </div>
               <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 18px",flex:1}}>
-                <div style={{color:C.yellow,fontSize:18,fontWeight:800}}>{$$(worker.rate)}/hr</div>
-                <div style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",marginTop:3}}>Your Rate</div>
+                <div style={{color:C.yellow,fontSize:18,fontWeight:800}}>Per Job</div>
+                <div style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",marginTop:3}}>Rate Varies</div>
               </div>
             </div>
             {approvedSubs.map(s => (
@@ -286,7 +289,7 @@ export default function WorkerPortal() {
                 <div style={{textAlign:"right"}}><div style={{fontSize:24,fontWeight:800,color:C.green}}>{$$(totalEarned)}</div><div style={{color:C.muted,fontSize:12}}>Total Earned</div></div>
               </div>
               <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
-                {[["Rate",`${$$(worker.rate)}/hr`],["Total Hours",hrs(totalHours)],["Approved Entries",String(approvedSubs.length)],["Pending Entries",String(pendingSubs.length)]].map(([label,value],i) => (
+                {[["Total Hours",hrs(totalHours)],["Approved Entries",String(approvedSubs.length)],["Pending Entries",String(pendingSubs.length)]].map(([label,value],i) => (
                   <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:10,fontSize:13}}>
                     <span style={{color:i===3?C.yellow:C.muted}}>{label}</span>
                     <span style={{color:i===3?C.yellow:C.text}}>{value}</span>
