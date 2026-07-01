@@ -27,6 +27,7 @@ interface Invoice {
   status: string; contractor_name: string; contractor_address: string;
   contractor_phone: string; contractor_email: string;
   sections: Section[]; notes: string; job_address: string; created_at: string;
+  sent_date?: string; paid_date?: string;
 }
 interface Settings { name: string; address: string; phone: string; email: string; payment_info: string; }
 
@@ -466,6 +467,12 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
   const [settings, setSettings] = useState<Settings>({ name: "", address: "", phone: "", email: "", payment_info: "" });
   const [showSettings, setShowSettings] = useState(false);
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
+
+  const markSent = async (inv: Invoice) => {
+    const today = new Date().toISOString().split("T")[0];
+    await supabase.from("invoices").update({ status: "sent", sent_date: today }).eq("id", inv.id);
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", sent_date: today } : i));
+  };
   const [filterProperty, setFilterProperty] = useState("all");
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -672,8 +679,21 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontWeight: 800, fontSize: 16, color: C.green }}>{$$(total)}</div>
-                  <div style={{ fontSize: 11, color: inv.status === "draft" ? C.yellow : C.green, textTransform: "uppercase", letterSpacing: 0.5 }}>{inv.status}</div>
+                  <div style={{ fontSize: 11, color: inv.status === "paid" ? C.green : inv.status === "sent" ? C.accentLight : C.yellow, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>{inv.status}</div>
                 </div>
+                <button onClick={(e) => { e.stopPropagation(); markSent(inv); }}
+                  disabled={inv.status === "sent" || inv.status === "paid"}
+                  style={{
+                    background: (inv.status === "sent" || inv.status === "paid") ? C.surface : C.accent,
+                    border: `1px solid ${(inv.status === "sent" || inv.status === "paid") ? C.border : C.accent}`,
+                    borderRadius: 8, padding: "8px 14px",
+                    color: (inv.status === "sent" || inv.status === "paid") ? C.muted : "#fff",
+                    fontSize: 12, fontWeight: 700,
+                    cursor: (inv.status === "sent" || inv.status === "paid") ? "default" : "pointer",
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                  {inv.status === "sent" ? "✓ Sent" : inv.status === "paid" ? "✓ Paid" : "Mark Sent"}
+                </button>
                 <span style={{ color: C.accentLight, fontSize: 18 }}>›</span>
               </div>
             </div>
