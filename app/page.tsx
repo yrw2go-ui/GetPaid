@@ -1449,4 +1449,47 @@ export default function GetPaid() {
               <button onClick={() => setLForm({ ...lForm, useTime: true })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${lForm.useTime ? C.accent : C.border}`, background: lForm.useTime ? C.accentGlow : "transparent", color: lForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Start / End Time</button>
             </div>
             {!lForm.useTime
-              ? <Field label="Hours" type="number" placeholder="8.5" value={lForm.hours} onChange={(e) => setLForm({ ...lForm, hours: e.target.value 
+              ? <Field label="Hours" type="number" placeholder="8.5" value={lForm.hours} onChange={(e) => setLForm({ ...lForm, hours: e.target.value })} />
+              : <div style={{ display: "flex", gap: 12 }}><div style={{ flex: 1 }}><Field label="Start" type="time" value={lForm.startTime} onChange={(e) => setLForm({ ...lForm, startTime: e.target.value })} /></div><div style={{ flex: 1 }}><Field label="End" type="time" value={lForm.endTime} onChange={(e) => setLForm({ ...lForm, endTime: e.target.value })} /></div></div>
+            }
+            {lForm.useTime && lForm.startTime && lForm.endTime && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: C.sub, marginTop: -8, marginBottom: 16 }}>
+                ⏱️ <strong style={{ color: C.text }}>{calcHours(lForm.startTime, lForm.endTime).toFixed(1)} hours</strong>
+              </div>
+            )}
+          </div>
+          <Field label="Date" type="date" value={lForm.date} onChange={(e) => setLForm({ ...lForm, date: e.target.value })} />
+          <Field label="Note (optional)" placeholder="e.g. Framing + demo" value={lForm.note} onChange={(e) => setLForm({ ...lForm, note: e.target.value })} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Deductions (optional)</div>
+            {lDeds.map((d, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", marginBottom: 8 }}>
+                <span style={{ flex: 1, fontSize: 13 }}>{d.title}</span>
+                <span style={{ color: C.red, fontWeight: 700, fontSize: 13 }}>-{$$(parseFloat(d.amount) || 0)}</span>
+                <button onClick={() => setLDeds(lDeds.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input placeholder="Item" value={lDedForm.title} onChange={(e) => setLDedForm({ ...lDedForm, title: e.target.value })} style={{ flex: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <input placeholder="$0" type="number" value={lDedForm.amount} onChange={(e) => setLDedForm({ ...lDedForm, amount: e.target.value })} style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
+              <button onClick={() => { if (!lDedForm.title || !lDedForm.amount) return; setLDeds([...lDeds, lDedForm]); setLDedForm({ title: "", amount: "" }); }} style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 14px", color: C.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add</button>
+            </div>
+          </div>
+          {lGross > 0 && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.sub, marginBottom: 4 }}><span>Gross ({lHours.toFixed(1)}h)</span><span>{$$(lGross)}</span></div>
+              {lDeds.map((d, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.red, marginBottom: 2 }}><span>- {d.title}</span><span>-{$$(parseFloat(d.amount) || 0)}</span></div>)}
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 15 }}>
+                <span style={{ color: C.text }}>Net Owed</span><span style={{ color: C.green }}>{$$(lNet)}</span>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <Btn v="ghost" onClick={() => setShowLog(false)}>Cancel</Btn>
+            <Btn onClick={saveLog}>Save Entry</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
