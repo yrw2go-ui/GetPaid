@@ -240,7 +240,7 @@ export default function WorkersTab({ userId, properties }: { userId: string; pro
       {showInvite && (
         <Modal title="Invite Worker" onClose={() => setShowInvite(false)}>
           <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.accentLight }}>
-            💡 We'll generate an invite link you can share with your worker. They'll use it to sign up for the worker portal at <strong>{typeof window !== "undefined" ? window.location.origin : ""}/worker</strong>
+            💡 We&apos;ll generate an invite link you can share with your worker. They'll use it to sign up for the worker portal at <strong>{typeof window !== "undefined" ? window.location.origin : ""}/worker</strong>
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Worker's Email</label>
