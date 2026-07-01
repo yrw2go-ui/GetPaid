@@ -756,15 +756,16 @@ export default function GetPaid() {
     async function load() {
       setLoading(true);
       // Migrate any existing data without user_id to this user (first-time login migration)
-      await Promise.all([
-        supabase.from("contractors").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("properties").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("logs").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("advances").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("expenses").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("invoices").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("scope_items").update({ user_id: user.id }).is("user_id", null),
-        supabase.from("mileage_logs").update({ user_id: user.id }).is("user_id", null),
+      const uid = user?.id;
+      if (uid) await Promise.all([
+        supabase.from("contractors").update({ user_id: uid }).is("user_id", null),
+        supabase.from("properties").update({ user_id: uid }).is("user_id", null),
+        supabase.from("logs").update({ user_id: uid }).is("user_id", null),
+        supabase.from("advances").update({ user_id: uid }).is("user_id", null),
+        supabase.from("expenses").update({ user_id: uid }).is("user_id", null),
+        supabase.from("invoices").update({ user_id: uid }).is("user_id", null),
+        supabase.from("scope_items").update({ user_id: uid }).is("user_id", null),
+        supabase.from("mileage_logs").update({ user_id: uid }).is("user_id", null),
       ]);
       const [{ data: c }, { data: p }, { data: l }, { data: a }, { data: si }, { data: exps }, { data: ei }] = await Promise.all([
         supabase.from("contractors").select("*").order("created_at"),
