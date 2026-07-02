@@ -133,6 +133,21 @@ export default function WorkerPortal() {
 
   useEffect(() => { if (user) loadData(); }, [user]);
 
+  const completeWorkerSetup = async () => {
+    if (!user) return;
+    const token = new URLSearchParams(window.location.search).get("invite") || "";
+    if (!token) { alert("No invite code in the link. Ask your employer for a fresh invite link."); return; }
+    const { data: invite } = await supabase.from("worker_invites").select("*").eq("token", token).single();
+    if (!invite) { alert("Invalid or expired invite code."); return; }
+    const name = prompt("Enter your full name:") || user.email;
+    await supabase.from("workers").insert({
+      account_id: invite.account_id, user_id: user.id, name, email: user.email,
+      rate: 0, status: "active", contractor_id: invite.contractor_id || null,
+    });
+    await supabase.from("worker_invites").update({ accepted: true }).eq("id", invite.id);
+    loadData();
+  };
+
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
@@ -181,14 +196,20 @@ export default function WorkerPortal() {
   if (!authChecked) return <div style={{ minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',sans-serif" }}><div style={{fontSize:40}}>💸</div></div>;
   if (!user) return <AuthScreen onAuth={setUser} />;
   if (loading) return <div style={{ minHeight:"100vh",background:C.bg,fontFamily:"'Inter',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,color:C.text }}><div style={{fontSize:40}}>💸</div><div style={{color:C.muted,fontSize:14}}>Loading your portal...</div></div>;
-  if (!worker) return (
+  if (!worker) {
+    const hasInvite = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invite");
+    return (
     <div style={{ minHeight:"100vh",background:C.bg,fontFamily:"'Inter',sans-serif",color:C.text,display:"flex",alignItems:"center",justifyContent:"center",padding:24,flexDirection:"column",gap:16,textAlign:"center" }}>
-      <div style={{fontSize:40}}>⚠️</div>
-      <div style={{fontWeight:700,fontSize:18}}>No worker account found</div>
-      <div style={{color:C.muted,fontSize:14}}>You need an invite link from your employer.</div>
+      <div style={{fontSize:40}}>{hasInvite ? "🎉" : "⚠️"}</div>
+      <div style={{fontWeight:700,fontSize:18}}>{hasInvite ? "Finish setting up your account" : "No worker account found"}</div>
+      <div style={{color:C.muted,fontSize:14,maxWidth:320}}>{hasInvite ? "You&apos;re logged in but haven&apos;t linked to your employer yet. Tap below to finish." : "You need an invite link from your employer to access this portal."}</div>
+      {hasInvite && (
+        <button onClick={completeWorkerSetup} style={{background:C.accent,border:"none",borderRadius:10,padding:"12px 24px",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}}>Complete Setup</button>
+      )}
       <button onClick={signOut} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 20px",color:C.muted,fontSize:14,cursor:"pointer"}}>Sign Out</button>
     </div>
   );
+  }
 
   return (
     <div style={{ minHeight:"100vh",background:C.bg,fontFamily:"'Inter',-apple-system,sans-serif",color:C.text }}>
