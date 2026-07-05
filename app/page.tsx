@@ -6,6 +6,7 @@ import InvoicesTab from "./invoices";
 import ScopeTab from "./scope";
 import TaxTab from "./tax";
 import WorkersTab from "./workers";
+import Form1099 from "./form1099";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -16,14 +17,14 @@ const supabase = createClient(
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b", yellowGlow: "rgba(245,158,11,0.15)",
   red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
   text: "#f1f1f3", muted: "#6b7280", sub: "#9ca3af",
 };
 
-const COLORS = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#14b8a6"];
+const COLORS = ["#f97316","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#14b8a6"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -1007,8 +1008,8 @@ export default function GetPaid() {
         <div style={{ display: "flex", alignItems: "center", height: 60, paddingLeft: 16 }}>
           {/* Logo — fixed, never scrolls */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingRight: 12, borderRight: `1px solid ${C.border}`, marginRight: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.accent}, #a78bfa)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>💸</div>
-            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.5, whiteSpace: "nowrap" }}>GetPaid</span>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${C.accent}, #fb923c)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>💸</div>
+            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: -0.5, whiteSpace: "nowrap" }}>Get<span style={{ color: "#f97316" }}>Paid</span></span>
           </div>
           {/* Tabs — scroll independently */}
           <div style={{ display: "flex", gap: 4, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch", paddingRight: 16, flex: 1 }}>
@@ -1260,7 +1261,7 @@ export default function GetPaid() {
 
         {/* EXPENSES */}
         {tab === "expenses" && (
-          <ExpensesTab properties={properties} />
+          <ExpensesTab properties={properties} userId={user.id} />
         )}
 
         {/* INVOICES */}
@@ -1285,6 +1286,18 @@ export default function GetPaid() {
 
         {/* 1099 */}
         {tab === "1099" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, gap: 8, alignItems: "center" }}>
+              <button onClick={() => setTaxYear(taxYear - 1)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.text, fontSize: 14, cursor: "pointer" }}>&#8249;</button>
+              <div style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 18px", color: C.accentLight, fontWeight: 800, fontSize: 16, minWidth: 70, textAlign: "center" }}>{taxYear}</div>
+              <button onClick={() => setTaxYear(taxYear + 1)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.text, fontSize: 14, cursor: "pointer" }}>&#8250;</button>
+            </div>
+            {user && <Form1099 userId={user.id} taxYear={taxYear} contractorPaidMap={tax1099.map(t => ({ id: t.con.id, name: t.con.name, paid: t.paidNet }))} />}
+          </div>
+        )}
+
+        {/* 1099 OLD SUMMARY */}
+        {false && tab === "1099" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
               <div>
@@ -1394,7 +1407,7 @@ export default function GetPaid() {
               style={{ width: "100%", background: "#13131a", border: `1px solid ${pinError ? "#ef4444" : "#2a2a3a"}`, borderRadius: 10, padding: "14px", color: "#f1f1f3", fontSize: 24, outline: "none", textAlign: "center", letterSpacing: 8, boxSizing: "border-box" as const, marginBottom: 8 }} />
             {pinError && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>⚠️ {pinError}</div>}
             <button onClick={unlockApp}
-              style={{ width: "100%", background: "#7c3aed", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              style={{ width: "100%", background: "#f97316", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
               Unlock
             </button>
           </div>
@@ -1416,7 +1429,7 @@ export default function GetPaid() {
               style={{ width: "100%", background: "#13131a", border: `1px solid ${pinError ? "#ef4444" : "#2a2a3a"}`, borderRadius: 10, padding: "14px", color: "#f1f1f3", fontSize: 24, outline: "none", textAlign: "center", letterSpacing: 8, boxSizing: "border-box" as const, marginBottom: 8 }} />
             {pinError && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 8 }}>⚠️ {pinError}</div>}
             <button onClick={savePin}
-              style={{ width: "100%", background: "#7c3aed", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              style={{ width: "100%", background: "#f97316", border: "none", borderRadius: 10, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
               {pinSetupStep === "enter" ? "Next" : "Set PIN & Lock"}
             </button>
             <button onClick={() => { setShowPinSetup(false); setPinInput(""); setPinError(""); setPinSetupStep("enter"); }}
@@ -1439,57 +1452,4 @@ export default function GetPaid() {
               onChange={(v) => setLForm({ ...lForm, rateOverride: v })}
             />
           )}
-          <Sel label="Property" value={lForm.propertyId} onChange={(e) => setLForm({ ...lForm, propertyId: e.target.value })}>
-            <option value="">Select property...</option>
-            {properties.map((p) => <option key={p.id} value={p.id}>{p.address}</option>)}
-          </Sel>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button onClick={() => setLForm({ ...lForm, useTime: false })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${!lForm.useTime ? C.accent : C.border}`, background: !lForm.useTime ? C.accentGlow : "transparent", color: !lForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Manual Hours</button>
-              <button onClick={() => setLForm({ ...lForm, useTime: true })} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${lForm.useTime ? C.accent : C.border}`, background: lForm.useTime ? C.accentGlow : "transparent", color: lForm.useTime ? C.accentLight : C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Start / End Time</button>
-            </div>
-            {!lForm.useTime
-              ? <Field label="Hours" type="number" placeholder="8.5" value={lForm.hours} onChange={(e) => setLForm({ ...lForm, hours: e.target.value })} />
-              : <div style={{ display: "flex", gap: 12 }}><div style={{ flex: 1 }}><Field label="Start" type="time" value={lForm.startTime} onChange={(e) => setLForm({ ...lForm, startTime: e.target.value })} /></div><div style={{ flex: 1 }}><Field label="End" type="time" value={lForm.endTime} onChange={(e) => setLForm({ ...lForm, endTime: e.target.value })} /></div></div>
-            }
-            {lForm.useTime && lForm.startTime && lForm.endTime && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: C.sub, marginTop: -8, marginBottom: 16 }}>
-                ⏱️ <strong style={{ color: C.text }}>{calcHours(lForm.startTime, lForm.endTime).toFixed(1)} hours</strong>
-              </div>
-            )}
-          </div>
-          <Field label="Date" type="date" value={lForm.date} onChange={(e) => setLForm({ ...lForm, date: e.target.value })} />
-          <Field label="Note (optional)" placeholder="e.g. Framing + demo" value={lForm.note} onChange={(e) => setLForm({ ...lForm, note: e.target.value })} />
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Deductions (optional)</div>
-            {lDeds.map((d, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", marginBottom: 8 }}>
-                <span style={{ flex: 1, fontSize: 13 }}>{d.title}</span>
-                <span style={{ color: C.red, fontWeight: 700, fontSize: 13 }}>-{$$(parseFloat(d.amount) || 0)}</span>
-                <button onClick={() => setLDeds(lDeds.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 8 }}>
-              <input placeholder="Item" value={lDedForm.title} onChange={(e) => setLDedForm({ ...lDedForm, title: e.target.value })} style={{ flex: 2, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
-              <input placeholder="$0" type="number" value={lDedForm.amount} onChange={(e) => setLDedForm({ ...lDedForm, amount: e.target.value })} style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", color: C.text, fontSize: 13, outline: "none" }} />
-              <button onClick={() => { if (!lDedForm.title || !lDedForm.amount) return; setLDeds([...lDeds, lDedForm]); setLDedForm({ title: "", amount: "" }); }} style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "8px 14px", color: C.accentLight, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add</button>
-            </div>
-          </div>
-          {lGross > 0 && (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.sub, marginBottom: 4 }}><span>Gross ({lHours.toFixed(1)}h)</span><span>{$$(lGross)}</span></div>
-              {lDeds.map((d, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.red, marginBottom: 2 }}><span>- {d.title}</span><span>-{$$(parseFloat(d.amount) || 0)}</span></div>)}
-              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 15 }}>
-                <span style={{ color: C.text }}>Net Owed</span><span style={{ color: C.green }}>{$$(lNet)}</span>
-              </div>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <Btn v="ghost" onClick={() => setShowLog(false)}>Cancel</Btn>
-            <Btn onClick={saveLog}>Save Entry</Btn>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
+          <Sel label="Property" value={lForm.propertyId} onChange={(e) => setLForm({ ...lForm, propertyId: e.t
