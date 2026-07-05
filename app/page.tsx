@@ -41,7 +41,7 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Contractor { id: string; name: string; rate: number; color: string; created_at?: string; }
-interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
+interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; client_name?: string; job_name?: string; description?: string; job_id_number?: string; }
 interface Deduction { title: string; amount: number; }
 interface Advance { id: string; contractor_id: string; amount: number; date: string; note: string; }
 interface Log {
@@ -318,7 +318,7 @@ function PropertyDetail({ property, logs, contractors, onBack, onTogglePaid, onD
 
   return (
     <div>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24 }}>&#8592; Back to Properties</button>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: C.accentLight, cursor: "pointer", fontSize: 14, fontWeight: 600, padding: 0, marginBottom: 24 }}>&#8592; Back</button>
       <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{property.address}</h1>
       <p style={{ color: C.muted, margin: "4px 0 24px", fontSize: 14 }}>{property.city}</p>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
@@ -719,6 +719,7 @@ export default function GetPaid() {
   const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [businessCategory, setBusinessCategory] = useState("rehab");
   const [authChecked, setAuthChecked] = useState(false);
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -732,7 +733,7 @@ export default function GetPaid() {
   const [showLog, setShowLog] = useState(false);
   const [crewSort, setCrewSort] = useState<{ by: "name"|"rate"|"date"|"owed"; dir: "asc"|"desc" }>({ by: "date", dir: "desc" });
   const [cForm, setCForm] = useState({ name: "", rate: "" });
-  const [pForm, setPForm] = useState({ address: "", city: "" });
+  const [pForm, setPForm] = useState({ address: "", city: "", client_name: "", job_name: "", description: "", job_id_number: "" });
   const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: today(), note: "", useTime: false, rateOverride: "", useRateOverride: false });
   const [lDeds, setLDeds] = useState<{ title: string; amount: string }[]>([]);
   const [lDedForm, setLDedForm] = useState({ title: "", amount: "" });
@@ -743,6 +744,9 @@ export default function GetPaid() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email || "" });
+        supabase.from("accounts").select("business_category").eq("user_id", session.user.id).single().then(({ data }) => {
+          if (data?.business_category) setBusinessCategory(data.business_category);
+        });
       }
       setAuthChecked(true);
     });
@@ -803,10 +807,18 @@ export default function GetPaid() {
   };
 
   const addProperty = async () => {
-    if (!pForm.address) return;
-    const { data } = await supabase.from("properties").insert({ address: pForm.address, city: pForm.city }).select().single();
+    // For job-based businesses, job_name or client_name is required instead of address
+    if (usesSites && !pForm.address) return;
+    if (!usesSites && !pForm.job_name && !pForm.client_name) return;
+    const { data } = await supabase.from("properties").insert({
+      address: pForm.address || pForm.job_name || pForm.client_name,
+      city: pForm.city,
+      client_name: pForm.client_name, job_name: pForm.job_name,
+      description: pForm.description, job_id_number: pForm.job_id_number,
+      user_id: user?.id,
+    }).select().single();
     if (data) setProperties([...properties, data]);
-    setPForm({ address: "", city: "" }); setShowAddP(false);
+    setPForm({ address: "", city: "", client_name: "", job_name: "", description: "", job_id_number: "" }); setShowAddP(false);
   };
 
   const saveLog = async () => {
@@ -972,10 +984,14 @@ export default function GetPaid() {
     if (typeof window !== "undefined") window.location.hash = id;
   };
 
+  const usesSites = businessCategory === "rehab" || businessCategory === "construction";
+  const propTerm = usesSites ? "Job Sites" : "Jobs";
+  const propTermSingular = usesSites ? "Job Site" : "Job";
+
   const ALL_TABS = [
     { id: "dashboard", label: "Dashboard", icon: "⚡", sensitive: true },
     { id: "contractors", label: "Crew", icon: "👷", sensitive: true },
-    { id: "properties", label: "Properties", icon: "🏠", sensitive: false },
+    { id: "properties", label: propTerm, icon: "🏠", sensitive: false },
     { id: "logs", label: "Hours", icon: "🕐", sensitive: true },
     { id: "1099", label: "1099", icon: "📋", sensitive: true },
     { id: "expenses", label: "Expenses", icon: "🧾", sensitive: false },
@@ -1049,7 +1065,7 @@ export default function GetPaid() {
             </div>
             {!locked && (portfolioRevenue > 0 || portfolioLabor > 0 || portfolioExpenses > 0) && (
               <div style={{ background: `linear-gradient(135deg, ${C.accent}15, ${C.accentGlow})`, border: `1px solid ${C.accent}44`, borderRadius: 14, padding: "20px 24px", marginBottom: 28 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentLight, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Portfolio P&L — All Properties</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.accentLight, textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Portfolio P&L — All {propTerm}</div>
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                   <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Revenue</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{$$(portfolioRevenue)}</div></div>
                   <div><div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase" }}>Labor</div><div style={{ fontSize: 18, fontWeight: 800, color: C.red }}>-{$$(portfolioLabor)}</div></div>
@@ -1082,7 +1098,7 @@ export default function GetPaid() {
               ))}
               {!contractors.length && <div style={{ color: C.muted, fontSize: 14 }}>No crew yet. Add one in the Crew tab.</div>}
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 14, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>Properties</div>
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 14, color: C.sub, textTransform: "uppercase", letterSpacing: 1 }}>{propTerm}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {pSummary.map((p) => (
                 <div key={p.id} onClick={() => { setTab("properties"); setSelectedProperty(p); }}
@@ -1176,7 +1192,7 @@ export default function GetPaid() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
                 <div>
-                  <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Properties</h1>
+                  <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>{propTerm}</h1>
                   <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>{properties.length} projects &middot; tap to view</p>
                 </div>
                 <Btn onClick={() => setShowAddP(true)}>+ Add</Btn>
@@ -1405,9 +1421,21 @@ export default function GetPaid() {
       )}
 
       {showAddP && (
-        <Modal title="Add Property" onClose={() => setShowAddP(false)}>
-          <Field label="Street Address" placeholder="e.g. 2847 Elmwood Ave" value={pForm.address} onChange={(e) => setPForm({ ...pForm, address: e.target.value })} />
-          <Field label="City, State" placeholder="e.g. Chicago, IL" value={pForm.city} onChange={(e) => setPForm({ ...pForm, city: e.target.value })} />
+        <Modal title={`Add ${propTermSingular}`} onClose={() => setShowAddP(false)}>
+          {usesSites ? (
+            <>
+              <Field label="Street Address" placeholder="e.g. 2847 Elmwood Ave" value={pForm.address} onChange={(e) => setPForm({ ...pForm, address: e.target.value })} />
+              <Field label="City, State" placeholder="e.g. Chicago, IL" value={pForm.city} onChange={(e) => setPForm({ ...pForm, city: e.target.value })} />
+            </>
+          ) : (
+            <>
+              <Field label="Client Name" placeholder="e.g. Jane Smith" value={pForm.client_name} onChange={(e) => setPForm({ ...pForm, client_name: e.target.value })} />
+              <Field label="Job Name" placeholder="e.g. Weekly Lawn Service" value={pForm.job_name} onChange={(e) => setPForm({ ...pForm, job_name: e.target.value })} />
+              <Field label="Description (optional)" placeholder="e.g. Mow, edge, blow" value={pForm.description} onChange={(e) => setPForm({ ...pForm, description: e.target.value })} />
+              <Field label="Job Address (optional)" placeholder="e.g. 123 Main St" value={pForm.address} onChange={(e) => setPForm({ ...pForm, address: e.target.value })} />
+              <Field label="Job ID # (optional)" placeholder="e.g. JOB-1001" value={pForm.job_id_number} onChange={(e) => setPForm({ ...pForm, job_id_number: e.target.value })} />
+            </>
+          )}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn v="ghost" onClick={() => setShowAddP(false)}>Cancel</Btn>
             <Btn onClick={addProperty}>Add</Btn>
