@@ -40,7 +40,7 @@ const calcHours = (start: string, end: string) => {
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Contractor { id: string; name: string; rate: number; color: string; created_at?: string; }
+interface Contractor { id: string; name: string; rate: number; color: string; created_at?: string; job_title?: string; }
 interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; client_name?: string; job_name?: string; description?: string; job_id_number?: string; }
 interface Deduction { title: string; amount: number; }
 interface Advance { id: string; contractor_id: string; amount: number; date: string; note: string; }
@@ -732,7 +732,7 @@ export default function GetPaid() {
   const [showAddP, setShowAddP] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [crewSort, setCrewSort] = useState<{ by: "name"|"rate"|"date"|"owed"; dir: "asc"|"desc" }>({ by: "date", dir: "desc" });
-  const [cForm, setCForm] = useState({ name: "", rate: "" });
+  const [cForm, setCForm] = useState({ name: "", rate: "", job_title: "" });
   const [pForm, setPForm] = useState({ address: "", city: "", client_name: "", job_name: "", description: "", job_id_number: "" });
   const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: today(), note: "", useTime: false, rateOverride: "", useRateOverride: false });
   const [lDeds, setLDeds] = useState<{ title: string; amount: string }[]>([]);
@@ -801,9 +801,9 @@ export default function GetPaid() {
   // CRUD
   const addContractor = async () => {
     if (!cForm.name || !cForm.rate) return;
-    const { data } = await supabase.from("contractors").insert({ name: cForm.name, rate: parseFloat(cForm.rate), color: COLORS[contractors.length % COLORS.length] }).select().single();
+    const { data } = await supabase.from("contractors").insert({ name: cForm.name, rate: parseFloat(cForm.rate), job_title: cForm.job_title, color: COLORS[contractors.length % COLORS.length], user_id: user?.id }).select().single();
     if (data) setContractors([...contractors, data]);
-    setCForm({ name: "", rate: "" }); setShowAddC(false);
+    setCForm({ name: "", rate: "", job_title: "" }); setShowAddC(false);
   };
 
   const addProperty = async () => {
@@ -990,7 +990,7 @@ export default function GetPaid() {
 
   const ALL_TABS = [
     { id: "dashboard", label: "Dashboard", icon: "⚡", sensitive: true },
-    { id: "contractors", label: "Crew", icon: "👷", sensitive: true },
+    { id: "contractors", label: "Workers", icon: "👷", sensitive: true },
     { id: "properties", label: propTerm, icon: "🏠", sensitive: false },
     { id: "logs", label: "Hours", icon: "🕐", sensitive: true },
     { id: "1099", label: "1099", icon: "📋", sensitive: true },
@@ -998,7 +998,6 @@ export default function GetPaid() {
     { id: "invoices", label: "Invoices", icon: "📄", sensitive: true },
     { id: "scope", label: "Scope", icon: "📋", sensitive: false },
     { id: "tax", label: "Tax", icon: "💼", sensitive: true },
-    { id: "workers", label: "Workers", icon: "👥", sensitive: true },
   ];
   const TABS = locked ? ALL_TABS.filter(t => !t.sensitive) : ALL_TABS;
 
@@ -1134,7 +1133,7 @@ export default function GetPaid() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
                 <div>
-                  <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Crew</h1>
+                  <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Workers</h1>
                   <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>{contractors.length} members &middot; tap to view</p>
                 </div>
                 <Btn onClick={() => setShowAddC(true)}>+ Add</Btn>
@@ -1169,7 +1168,7 @@ export default function GetPaid() {
                       onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.accent + "66")}
                       onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}>
                       <div style={{ width: 46, height: 46, borderRadius: 14, background: con.color + "22", border: `2px solid ${con.color}44`, display: "flex", alignItems: "center", justifyContent: "center", color: con.color, fontWeight: 800, fontSize: 15 }}>{initials(con.name)}</div>
-                      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 16 }}>{con.name}</div><div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{$$(con.rate)}/hr</div></div>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 16 }}>{con.name}</div>{con.job_title ? <div style={{ color: C.accentLight, fontSize: 12, marginTop: 2 }}>{con.job_title}</div> : null}<div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>{$$(con.rate)}/hr</div></div>
                       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
                         <div style={{ textAlign: "center" }}><div style={{ fontWeight: 700 }}>{hrs(s.hours)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Hours</div></div>
                         <div style={{ textAlign: "center" }}><div style={{ color: C.red, fontWeight: 700 }}>{$$(s.owed)}</div><div style={{ color: C.muted, fontSize: 11, textTransform: "uppercase" }}>Owed</div></div>
@@ -1180,6 +1179,12 @@ export default function GetPaid() {
                   );
                 })}
               </div>
+              {/* Invites & Approvals section */}
+              {user && (
+                <div style={{ marginTop: 40, borderTop: `1px solid ${C.border}`, paddingTop: 32 }}>
+                  <WorkersTab userId={user.id} properties={properties} contractors={contractors} />
+                </div>
+              )}
             </div>
           )
         )}
@@ -1318,10 +1323,6 @@ export default function GetPaid() {
         )}
 
         {/* WORKERS */}
-        {tab === "workers" && user && (
-          <WorkersTab userId={user.id} properties={properties} contractors={contractors} />
-        )}
-
         {/* 1099 */}
         {tab === "1099" && (
           <div>
@@ -1410,8 +1411,9 @@ export default function GetPaid() {
 
       {/* MODALS */}
       {showAddC && (
-        <Modal title="Add Crew Member" onClose={() => setShowAddC(false)}>
+        <Modal title="Add Worker" onClose={() => setShowAddC(false)}>
           <Field label="Full Name" placeholder="e.g. Marcus Webb" value={cForm.name} onChange={(e) => setCForm({ ...cForm, name: e.target.value })} />
+          <Field label="Job Title (optional)" placeholder="e.g. Lead Painter" value={cForm.job_title} onChange={(e) => setCForm({ ...cForm, job_title: e.target.value })} />
           <Field label="Hourly Rate ($)" type="number" placeholder="45" value={cForm.rate} onChange={(e) => setCForm({ ...cForm, rate: e.target.value })} />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn v="ghost" onClick={() => setShowAddC(false)}>Cancel</Btn>
