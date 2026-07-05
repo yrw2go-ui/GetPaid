@@ -14,6 +14,15 @@ const C = {
   text: "#f1f1f3", muted: "#9ca3af", sub: "#d1d5db",
 };
 
+const CATEGORIES = [
+  { id: "rehab", label: "Rehab / House Flipping", term: "Job Sites", icon: "🏚️" },
+  { id: "construction", label: "General Contractor / Construction", term: "Job Sites", icon: "🏗️" },
+  { id: "cleaning", label: "Cleaning Service", term: "Jobs", icon: "🧹" },
+  { id: "landscaping", label: "Landscaping / Lawn Care", term: "Jobs", icon: "🌳" },
+  { id: "handyman", label: "Handyman / Repair", term: "Jobs", icon: "🔧" },
+  { id: "other", label: "Other Small Business", term: "Jobs", icon: "💼" },
+];
+
 const PLANS = [
   { id: "solo", name: "Solo", price: "$12.99/mo", desc: "Just you — invoices, expenses, scope, receipt scanning", workers: 0 },
   { id: "crew", name: "Crew", price: "$29.99/mo", desc: "Up to 10 workers, worker portal, pay stubs, 1099-NEC", workers: 10 },
@@ -23,6 +32,7 @@ const PLANS = [
 export default function AuthPage({ onAuth }: { onAuth: (user: { id: string; email: string }) => void }) {
   const [mode, setMode] = useState<"login"|"signup">("login");
   const [plan, setPlan] = useState("solo");
+  const [category, setCategory] = useState("rehab");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -51,7 +61,7 @@ export default function AuthPage({ onAuth }: { onAuth: (user: { id: string; emai
         if (err) throw err;
         if (data.user) {
           await supabase.from("accounts").insert({
-            user_id: data.user.id, email, business_name: businessName, plan, scan_count: 0,
+            user_id: data.user.id, email, business_name: businessName, plan, scan_count: 0, business_category: category,
           });
           onAuth({ id: data.user.id, email: data.user.email || "" });
         }
@@ -112,6 +122,18 @@ export default function AuthPage({ onAuth }: { onAuth: (user: { id: string; emai
               <input value={businessName} onChange={(e) => setBusinessName(e.target.value)}
                 placeholder="e.g. Bowser Contracting" onFocus={() => setFocused("biz")} onBlur={() => setFocused("")}
                 style={inp("biz")} />
+            </div>
+          )}
+          {mode === "signup" && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" }}>Business Type</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}
+                style={{ width: "100%", background: "#13131a", border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", color: C.text, fontSize: 15, outline: "none", boxSizing: "border-box" }}>
+                {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.label}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                {CATEGORIES.find(c => c.id === category)?.term === "Job Sites" ? "Track work by property address." : "Track work by client & job — no address required."}
+              </div>
             </div>
           )}
 
