@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", red: "#ef4444",
   text: "#f1f1f3", muted: "#9ca3af", sub: "#d1d5db",
 };
@@ -68,8 +68,8 @@ export default function AuthPage({ onAuth }: { onAuth: (user: { id: string; emai
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg, ${C.accent}, #a78bfa)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 16px" }}>💸</div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, letterSpacing: -1.5, margin: 0 }}>GetPaid</h1>
+          <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg, ${C.accent}, #fb923c)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 16px" }}>💸</div>
+          <h1 style={{ fontSize: 32, fontWeight: 900, letterSpacing: -1.5, margin: 0 }}>Get<span style={{ color: "#f97316" }}>Paid</span></h1>
           <p style={{ color: C.muted, margin: "8px 0 0", fontSize: 15 }}>Contractor payroll & job management</p>
         </div>
 
@@ -137,7 +137,7 @@ export default function AuthPage({ onAuth }: { onAuth: (user: { id: string; emai
           )}
 
           <button onClick={handleAuth} disabled={loading}
-            style={{ width: "100%", background: loading ? "#2a2a3a" : `linear-gradient(135deg, ${C.accent}, #a78bfa)`, border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 800, cursor: loading ? "not-allowed" : "pointer", letterSpacing: -0.3 }}>
+            style={{ width: "100%", background: loading ? "#2a2a3a" : `linear-gradient(135deg, ${C.accent}, #fb923c)`, border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 800, cursor: loading ? "not-allowed" : "pointer", letterSpacing: -0.3 }}>
             {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
           </button>
 
