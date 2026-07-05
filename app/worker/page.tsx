@@ -50,9 +50,18 @@ function AuthScreen({ onAuth }: { onAuth: (u: { id: string; email: string }) => 
         const { data, error: err } = await supabase.auth.signUp({ email, password });
         if (err) throw err;
         if (data.user) {
+          // Auto-create a crew card if not linked to an existing one
+          let contractorId = invite.contractor_id || null;
+          if (!contractorId) {
+            const colors = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#84cc16"];
+            const { data: newCon } = await supabase.from("contractors").insert({
+              name, rate: 0, job_title: "", color: colors[Math.floor(Math.random()*colors.length)],
+            }).select().single();
+            if (newCon) contractorId = newCon.id;
+          }
           await supabase.from("workers").insert({
             account_id: invite.account_id, user_id: data.user.id, name, email,
-            rate: 0, status: "active", contractor_id: invite.contractor_id || null,
+            rate: 0, status: "active", contractor_id: contractorId,
           });
           await supabase.from("worker_invites").update({ accepted: true }).eq("id", invite.id);
           onAuth({ id: data.user.id, email: data.user.email || "" });
@@ -140,9 +149,17 @@ export default function WorkerPortal() {
     const { data: invite } = await supabase.from("worker_invites").select("*").eq("token", token).single();
     if (!invite) { alert("Invalid or expired invite code."); return; }
     const name = prompt("Enter your full name:") || user.email;
+    let contractorId = invite.contractor_id || null;
+    if (!contractorId) {
+      const colors = ["#7c3aed","#10b981","#f59e0b","#ef4444","#06b6d4","#ec4899","#8b5cf6","#84cc16"];
+      const { data: newCon } = await supabase.from("contractors").insert({
+        name, rate: 0, job_title: "", color: colors[Math.floor(Math.random()*colors.length)],
+      }).select().single();
+      if (newCon) contractorId = newCon.id;
+    }
     await supabase.from("workers").insert({
       account_id: invite.account_id, user_id: user.id, name, email: user.email,
-      rate: 0, status: "active", contractor_id: invite.contractor_id || null,
+      rate: 0, status: "active", contractor_id: contractorId,
     });
     await supabase.from("worker_invites").update({ accepted: true }).eq("id", invite.id);
     loadData();
