@@ -37,7 +37,7 @@ const calcHours = (start: string, end: string) => {
   if (d < 0) d += 24;
   return Math.round(d * 10) / 10;
 };
-const today = () => new Date().toISOString().split("T")[0];
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Contractor { id: string; name: string; rate: number; color: string; created_at?: string; }

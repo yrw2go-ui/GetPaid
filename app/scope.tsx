@@ -18,7 +18,7 @@ const C = {
 
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 const IRS_RATE = 0.70;
-const today = () => new Date().toISOString().split("T")[0];
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
 interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
 interface ScopeItem {

@@ -17,7 +17,7 @@ const C = {
 };
 
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-const today = () => new Date().toISOString().split("T")[0];
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
 const CATEGORIES = ["Materials", "Tools", "Flooring", "Plumbing", "Electrical", "Paint", "Hardware", "Lumber", "Appliances", "Other"];
 

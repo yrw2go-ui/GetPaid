@@ -17,7 +17,7 @@ const C = {
 };
 
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
-const today = () => new Date().toISOString().split("T")[0];
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
 interface Property { id: string; address: string; city: string; }
 interface LineItem { id: string; description: string; materials: number; labor: number; }
@@ -469,13 +469,13 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
   const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
 
   const markSent = async (inv: Invoice) => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
     await supabase.from("invoices").update({ status: "sent", sent_date: today }).eq("id", inv.id);
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "sent", sent_date: today } : i));
   };
 
   const markPaid = async (inv: Invoice) => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
     await supabase.from("invoices").update({ status: "paid", paid_date: today }).eq("id", inv.id);
     setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: "paid", paid_date: today } : i));
   };
