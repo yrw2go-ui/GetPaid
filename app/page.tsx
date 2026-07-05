@@ -40,7 +40,7 @@ const calcHours = (start: string, end: string) => {
 const today = () => new Date().toISOString().split("T")[0];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Contractor { id: string; name: string; rate: number; color: string; }
+interface Contractor { id: string; name: string; rate: number; color: string; created_at?: string; }
 interface Property { id: string; address: string; city: string; status?: string; closed_date?: string; }
 interface Deduction { title: string; amount: number; }
 interface Advance { id: string; contractor_id: string; amount: number; date: string; note: string; }
@@ -730,6 +730,7 @@ export default function GetPaid() {
   const [showAddC, setShowAddC] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [crewSort, setCrewSort] = useState<{ by: "name"|"rate"|"date"|"owed"; dir: "asc"|"desc" }>({ by: "date", dir: "desc" });
   const [cForm, setCForm] = useState({ name: "", rate: "" });
   const [pForm, setPForm] = useState({ address: "", city: "" });
   const [lForm, setLForm] = useState({ contractorId: "", propertyId: "", hours: "", startTime: "", endTime: "", date: today(), note: "", useTime: false, rateOverride: "", useRateOverride: false });
@@ -1115,15 +1116,36 @@ export default function GetPaid() {
             />
           ) : (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20 }}>
                 <div>
                   <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Crew</h1>
                   <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>{contractors.length} members &middot; tap to view</p>
                 </div>
                 <Btn onClick={() => setShowAddC(true)}>+ Add</Btn>
               </div>
+              {/* Sort toggles */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {([["name","Name"],["rate","Rate"],["date","Date Added"],["owed","Most Owed"]] as const).map(([key, label]) => {
+                  const active = crewSort.by === key;
+                  return (
+                    <button key={key} onClick={() => setCrewSort(prev => prev.by === key ? { by: key, dir: prev.dir === "asc" ? "desc" : "asc" } : { by: key, dir: "desc" })}
+                      style={{ background: active ? C.accentGlow : C.surface, border: `1px solid ${active ? C.accent + "44" : C.border}`, borderRadius: 8, padding: "7px 13px", color: active ? C.accentLight : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                      {label} {active && (crewSort.dir === "asc" ? "↑" : "↓")}
+                    </button>
+                  );
+                })}
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {contractors.map((con) => {
+                {[...contractors].sort((a, b) => {
+                  const sa = cSummary.find(x => x.id === a.id)!;
+                  const sb = cSummary.find(x => x.id === b.id)!;
+                  let cmp = 0;
+                  if (crewSort.by === "name") cmp = a.name.localeCompare(b.name);
+                  else if (crewSort.by === "rate") cmp = a.rate - b.rate;
+                  else if (crewSort.by === "date") cmp = (a.created_at || "").localeCompare(b.created_at || "");
+                  else if (crewSort.by === "owed") cmp = sa.owed - sb.owed;
+                  return crewSort.dir === "asc" ? cmp : -cmp;
+                }).map((con) => {
                   const s = cSummary.find((x) => x.id === con.id)!;
                   return (
                     <div key={con.id} onClick={() => setSelectedContractor(con)}
