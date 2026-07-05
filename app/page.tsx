@@ -1276,7 +1276,7 @@ export default function GetPaid() {
 
         {/* TAX */}
         {tab === "tax" && (
-          <TaxTab properties={properties} />
+          <TaxTab properties={properties} contractLabor={tax1099.map(t => ({ id: t.con.id, name: t.con.name, paid: t.paidNet }))} taxYear={taxYear} />
         )}
 
         {/* WORKERS */}
