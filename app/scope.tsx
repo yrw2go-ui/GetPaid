@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b", yellowGlow: "rgba(245,158,11,0.15)",
   red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
@@ -375,7 +375,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           <Btn v="ghost" onClick={() => fileRef.current?.click()} disabled={scanning}>{scanning ? "Scanning..." : "📎 Upload Scope"}</Btn>
           <Btn v="ghost" onClick={() => setShowMileage(!showMileage)}>🚗 Mileage</Btn>
           <Btn v={invoiceSubmitted ? "success" : "ghost"} onClick={toggleInvoiceSubmitted}>{invoiceSubmitted ? "✓ Invoice Submitted" : "📤 Mark Invoice Submitted"}</Btn>
-          <Btn v="primary" onClick={sendToInvoice} style={{ background: "linear-gradient(135deg, #7c3aed, #a78bfa)" }}>📄 Send to Invoice</Btn>
+          <Btn v="primary" onClick={sendToInvoice} style={{ background: "linear-gradient(135deg, #f97316, #fb923c)" }}>📄 Send to Invoice</Btn>
           <Btn v={isClosed ? "ghost" : "success"} onClick={() => setShowCloseConfirm(true)}>{isClosed ? "↩ Reopen" : "✓ Close Property"}</Btn>
         </div>
       </div>

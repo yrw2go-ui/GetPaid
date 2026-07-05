@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b",
   red: "#ef4444",
@@ -19,7 +19,7 @@ const C = {
 const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Materials: "#7c3aed", Tools: "#f59e0b", Flooring: "#10b981",
+  Materials: "#f97316", Tools: "#f59e0b", Flooring: "#10b981",
   Plumbing: "#06b6d4", Electrical: "#f97316", Paint: "#ec4899",
   Hardware: "#8b5cf6", Lumber: "#84cc16", Appliances: "#14b8a6", Other: "#6b7280",
 };

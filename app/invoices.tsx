@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b",
   red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
@@ -650,7 +650,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
         </div>
       )}
       {scanning && (
-        <div style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "#a78bfa", textAlign: "center" }}>
+        <div style={{ background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "#fb923c", textAlign: "center" }}>
           🤖 AI is reading your invoice — extracting line items, amounts, and contractor info...
         </div>
       )}

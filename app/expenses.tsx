@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b", yellowGlow: "rgba(245,158,11,0.15)",
   red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
@@ -22,7 +22,7 @@ const today = () => new Date().toISOString().split("T")[0];
 const CATEGORIES = ["Materials", "Tools", "Flooring", "Plumbing", "Electrical", "Paint", "Hardware", "Lumber", "Appliances", "Other"];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Materials: "#7c3aed", Tools: "#f59e0b", Flooring: "#10b981",
+  Materials: "#f97316", Tools: "#f59e0b", Flooring: "#10b981",
   Plumbing: "#06b6d4", Electrical: "#f97316", Paint: "#ec4899",
   Hardware: "#8b5cf6", Lumber: "#84cc16", Appliances: "#14b8a6", Other: "#6b7280",
 };
@@ -393,7 +393,7 @@ function ExpenseDetail({ expense, propertyName, onBack, onDelete, onAssign }: {
 }
 
 // ── Main Expenses Tab ─────────────────────────────────────────────────────────
-export default function ExpensesTab({ properties }: { properties: Property[] }) {
+export default function ExpensesTab({ properties, userId }: { properties: Property[]; userId: string }) {
   const [expenses, setExpenses] = useState<(Expense & { items: ExpenseItem[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showScan, setShowScan] = useState(false);
@@ -424,9 +424,10 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
     const { items, ...expData } = data;
     const { data: exp } = await supabase.from("expenses").insert({
       property_id: expData.property_id, store: expData.store, date: expData.date, notes: expData.notes,
+      user_id: userId,
     }).select().single();
     if (exp) {
-      const itemRows = items.map(item => ({ ...item, expense_id: exp.id }));
+      const itemRows = items.map(item => ({ ...item, expense_id: exp.id, user_id: userId }));
       const { data: savedItems } = await supabase.from("expense_items").insert(itemRows).select();
       setExpenses(prev => [{ ...exp, items: savedItems || [] }, ...prev]);
     }
@@ -465,13 +466,13 @@ export default function ExpensesTab({ properties }: { properties: Property[] }) 
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Expenses</h1>
-          <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>Receipts, materials, and rehab costs</p>
-        </div>
-        <Btn onClick={() => setShowScan(true)}>+ Upload Receipt</Btn>
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Expenses</h1>
+        <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>Receipts, materials, and rehab costs</p>
       </div>
+      <Btn onClick={() => setShowScan(true)} style={{ width: "100%", fontSize: 15, padding: "14px", marginBottom: 24, textAlign: "center" }}>
+        📷 + Upload Receipt
+      </Btn>
 
       {/* Stats */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
