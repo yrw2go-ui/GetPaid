@@ -9,7 +9,7 @@ const supabase = createClient(
 
 const C = {
   bg: "#0a0a0f", surface: "#13131a", card: "#1a1a24", border: "#2a2a3a",
-  accent: "#7c3aed", accentLight: "#a78bfa", accentGlow: "rgba(124,58,237,0.15)",
+  accent: "#f97316", accentLight: "#fb923c", accentGlow: "rgba(249,115,22,0.15)",
   green: "#10b981", greenGlow: "rgba(16,185,129,0.15)",
   yellow: "#f59e0b", red: "#ef4444", redGlow: "rgba(239,68,68,0.15)",
   text: "#f1f1f3", muted: "#9ca3af", sub: "#d1d5db",
@@ -67,7 +67,7 @@ function AuthScreen({ onAuth }: { onAuth: (u: { id: string; email: string }) => 
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>💸</div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: -1, margin: 0 }}>GetPaid</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: -1, margin: 0 }}>Get<span style={{ color: "#f97316" }}>Paid</span></h1>
           <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>Worker Portal</p>
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: 28 }}>
