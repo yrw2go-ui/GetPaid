@@ -461,7 +461,7 @@ function SettingsModal({ settings, onSave, onClose }: { settings: Settings; onSa
 }
 
 // ── Main Invoices Tab ─────────────────────────────────────────────────────────
-export default function InvoicesTab({ properties }: { properties: Property[] }) {
+export default function InvoicesTab({ properties, userId }: { properties: Property[]; userId: string }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<Settings>({ name: "", address: "", phone: "", email: "", payment_info: "" });
@@ -510,6 +510,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
   const createInvoice = async (propertyId: string | null) => {
     const property = properties.find(p => p.id === propertyId);
     const { data } = await supabase.from("invoices").insert({
+      user_id: userId,
       property_id: propertyId || null,
       invoice_number: Math.floor(Math.random() * 900000) + 100000,
       date: today(),
@@ -562,6 +563,7 @@ export default function InvoicesTab({ properties }: { properties: Property[] }) 
       const invNum = parsed.invoice_number && parsed.invoice_number > 0 ? parsed.invoice_number : maxNum + 1;
 
       const { data } = await supabase.from("invoices").insert({
+      user_id: userId,
         property_id: matchedProperty?.id || properties[0]?.id || null,
         invoice_number: invNum,
         date: parsed.date || today(),
