@@ -205,6 +205,12 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     setTimeout(() => setCopiedToken(""), 3000);
   };
 
+  const deleteInvite = async (id: string) => {
+    if (!confirm("Delete this invite? The link will stop working.")) return;
+    await supabase.from("worker_invites").delete().eq("id", id);
+    setInvites(prev => prev.filter(i => i.id !== id));
+  };
+
   const emailInviteLink = (token: string, toEmail: string) => {
     const link = `${window.location.origin}/worker?invite=${token}`;
     const subject = encodeURIComponent("You're invited to the GetPaid worker portal");
@@ -415,6 +421,10 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
                     <button onClick={() => copyInviteLink(inv.token)}
                       style={{ background: copiedToken === inv.token ? C.greenGlow : C.surface, border: `1px solid ${copiedToken === inv.token ? C.green : C.border}44`, borderRadius: 8, padding: "6px 12px", color: copiedToken === inv.token ? C.green : C.muted, fontSize: 12, cursor: "pointer" }}>
                       {copiedToken === inv.token ? "✓ Copied" : "Copy"}
+                    </button>
+                    <button onClick={() => deleteInvite(inv.id)}
+                      style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "6px 10px", color: C.red, fontSize: 12, cursor: "pointer" }}>
+                      🗑️
                     </button>
                   </div>
                 </div>
