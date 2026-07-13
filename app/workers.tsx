@@ -20,7 +20,7 @@ const $$ = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", cu
 const hrs = (h: number) => `${Number(h).toFixed(1)}h`;
 
 interface Worker { id: string; name: string; email: string; rate: number; status: string; contractor_id?: string; }
-interface Submission { id: string; worker_id: string; hours: number; date: string; note: string; status: string; property_id: string; }
+interface Submission { id: string; worker_id: string; hours: number; date: string; note: string; status: string; property_id: string; manual_location?: string; }
 interface Property { id: string; address: string; }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -50,6 +50,11 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
   const [tab, setTab] = useState<"workers"|"approvals">("approvals");
   const [copiedToken, setCopiedToken] = useState("");
   const [approvalRates, setApprovalRates] = useState<Record<string, string>>({});
+  const [activePunches, setActivePunches] = useState<{ id: string; worker_id: string; clock_in: string; property_id: string | null; manual_location: string }[]>([]);
+  const [punchModal, setPunchModal] = useState<Worker | null>(null);
+  const [adminPunchProp, setAdminPunchProp] = useState("");
+  const [adminPunchManual, setAdminPunchManual] = useState("");
+  const [nowTick, setNowTick] = useState(Date.now());
 
   useEffect(() => { load(); }, [userId]);
 
@@ -58,15 +63,72 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     const { data: acc } = await supabase.from("accounts").select("id,plan").eq("user_id", userId).single();
     if (!acc) { setLoading(false); return; }
     setAccount(acc);
-    const [{ data: w }, { data: s }, { data: inv }] = await Promise.all([
+    const [{ data: w }, { data: s }, { data: inv }, { data: punches }] = await Promise.all([
       supabase.from("workers").select("*").eq("account_id", acc.id),
       supabase.from("hour_submissions").select("*").eq("account_id", acc.id).eq("status", "pending").order("date", { ascending: false }),
       supabase.from("worker_invites").select("*").eq("account_id", acc.id).order("created_at", { ascending: false }),
+      supabase.from("time_punches").select("*").eq("account_id", acc.id).is("clock_out", null),
     ]);
     setWorkers(w || []);
     setSubmissions(s || []);
     setInvites(inv || []);
+    setActivePunches(punches || []);
     setLoading(false);
+  };
+
+  // Live tick for running timers
+  useEffect(() => {
+    if (!activePunches.length) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [activePunches.length]);
+
+  const elapsedFor = (clockIn: string) => {
+    const secs = Math.max(0, Math.floor((nowTick - new Date(clockIn).getTime()) / 1000));
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+    return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  };
+
+  const adminClockIn = async () => {
+    if (!punchModal || !account) return;
+    if (!adminPunchProp && !adminPunchManual.trim()) { alert("Pick a job or type a location."); return; }
+    const { data, error } = await supabase.from("time_punches").insert({
+      account_id: account.id, worker_id: punchModal.id,
+      contractor_id: punchModal.contractor_id || null,
+      property_id: adminPunchProp || null,
+      manual_location: adminPunchProp ? "" : adminPunchManual.trim(),
+      clock_in: new Date().toISOString(), submitted: false,
+    }).select().single();
+    if (error) { alert("Error: " + error.message); return; }
+    if (data) setActivePunches(prev => [...prev, data]);
+    setPunchModal(null); setAdminPunchProp(""); setAdminPunchManual("");
+  };
+
+  const adminClockOut = async (punch: { id: string; worker_id: string; clock_in: string; property_id: string | null; manual_location: string }) => {
+    if (!account) return;
+    const w = workers.find(x => x.id === punch.worker_id);
+    if (!w) return;
+    const out = new Date();
+    const inTime = new Date(punch.clock_in);
+    const hours = Math.round(((out.getTime() - inTime.getTime()) / 3600000) * 100) / 100;
+    if (hours <= 0) { alert("Shift too short to record."); return; }
+
+    await supabase.from("time_punches").update({
+      clock_out: out.toISOString(), submitted: true,
+    }).eq("id", punch.id);
+
+    const d = inTime;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+    await supabase.from("hour_submissions").insert({
+      account_id: account.id, worker_id: punch.worker_id,
+      property_id: punch.property_id,
+      manual_location: punch.manual_location || "",
+      hours, date: dateStr, note: "Clocked shift", status: "pending",
+    });
+
+    setActivePunches(prev => prev.filter(p => p.id !== punch.id));
+    load();
   };
 
   const sendInvite = async () => {
@@ -95,9 +157,12 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     const rate = parseFloat(approvalRates[sub.id] || "0");
     if (!rate || rate <= 0) { alert("Enter the pay rate for this job before approving."); return; }
     // Create actual log entry with the per-job rate as rate_override
+    const noteWithLoc = sub.property_id
+      ? sub.note
+      : [sub.manual_location, sub.note].filter(Boolean).join(" — ");
     await supabase.from("logs").insert({
-      contractor_id: worker.contractor_id || null, property_id: sub.property_id,
-      hours: sub.hours, date: sub.date, note: sub.note,
+      contractor_id: worker.contractor_id || null, property_id: sub.property_id || null,
+      hours: sub.hours, date: sub.date, note: noteWithLoc,
       paid: false, deductions: "[]", rate_override: rate,
       user_id: userId,
     });
@@ -125,7 +190,7 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     setTimeout(() => setCopiedToken(""), 3000);
   };
 
-  const getProperty = (id: string) => properties.find(p => p.id === id)?.address || "Unknown";
+  const getProperty = (id: string, manual?: string) => properties.find(p => p.id === id)?.address || manual || "Unknown";
   const getWorkerName = (id: string) => workers.find(w => w.id === id)?.name || "Unknown";
 
   if (loading) return <div style={{ color: C.muted, textAlign: "center", padding: "40px 0" }}>Loading...</div>;
@@ -134,14 +199,42 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Workers</h1>
-          <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 14 }}>{workers.length} workers · {submissions.length} pending approval</p>
+          <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.5, margin: 0 }}>Portal &amp; Approvals</h2>
+          <p style={{ color: C.muted, margin: "6px 0 0", fontSize: 13 }}>{workers.length} on portal · {submissions.length} pending approval</p>
         </div>
         <button onClick={() => setShowInvite(true)}
           style={{ background: C.accent, border: "none", borderRadius: 10, padding: "10px 18px", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
           + Invite Worker
         </button>
       </div>
+
+      {/* ON THE CLOCK */}
+      {activePunches.length > 0 && (
+        <div style={{ background: `linear-gradient(135deg, ${C.green}18, rgba(16,185,129,0.06))`, border: `1px solid ${C.green}44`, borderRadius: 14, padding: "16px 18px", marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+            🟢 On the Clock ({activePunches.length})
+          </div>
+          {activePunches.map(p => {
+            const w = workers.find(x => x.id === p.worker_id);
+            const loc = p.property_id
+              ? (properties.find(pr => pr.id === p.property_id)?.address || "Job")
+              : p.manual_location;
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderTop: `1px solid ${C.border}44` }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{w?.name || "Worker"}</div>
+                  <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>📍 {loc}</div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 18, color: C.green, fontVariantNumeric: "tabular-nums" as const }}>{elapsedFor(p.clock_in)}</div>
+                <button onClick={() => adminClockOut(p)}
+                  style={{ background: C.redGlow, border: `1px solid ${C.red}44`, borderRadius: 8, padding: "8px 14px", color: C.red, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Clock Out
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {copiedToken && (
         <div style={{ background: C.greenGlow, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C.green }}>
@@ -173,7 +266,7 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{getWorkerName(s.worker_id)}</div>
-                  <div style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{s.date} · {getProperty(s.property_id)}</div>
+                  <div style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{s.date} · {getProperty(s.property_id, s.manual_location)}</div>
                   {s.note && <div style={{ color: C.sub, fontSize: 12, fontStyle: "italic", marginTop: 3 }}>{s.note}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -228,10 +321,18 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
                 <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{w.email} · {$$(w.rate)}/hr</div>
                 {w.contractor_id && <div style={{ fontSize: 11, color: C.accentLight, marginTop: 2 }}>🔗 Linked to {contractors.find(c => c.id === w.contractor_id)?.name || "crew member"}</div>}
               </div>
-              <button onClick={() => setEditWorker({ ...w })}
-                style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 14px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                Edit Rate
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {!activePunches.some(p => p.worker_id === w.id) && (
+                  <button onClick={() => { setPunchModal(w); setAdminPunchProp(""); setAdminPunchManual(""); }}
+                    style={{ background: C.greenGlow, border: `1px solid ${C.green}44`, borderRadius: 8, padding: "6px 14px", color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Clock In
+                  </button>
+                )}
+                <button onClick={() => setEditWorker({ ...w })}
+                  style={{ background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 14px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Edit Rate
+                </button>
+              </div>
             </div>
           ))}
 
@@ -297,6 +398,33 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
           </div>
         </Modal>
       )}
+      {punchModal && (
+        <Modal title={`Clock In — ${punchModal.name}`} onClose={() => setPunchModal(null)}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" as const }}>Pick a Job</label>
+            <select value={adminPunchProp} onChange={e => { setAdminPunchProp(e.target.value); if (e.target.value) setAdminPunchManual(""); }}
+              style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none" }}>
+              <option value="">Select a job...</option>
+              {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+            </select>
+          </div>
+          <div style={{ textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 16 }}>— or —</div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 0.8, textTransform: "uppercase" as const }}>Type a Location</label>
+            <input value={adminPunchManual} onChange={e => { setAdminPunchManual(e.target.value); if (e.target.value) setAdminPunchProp(""); }}
+              placeholder="e.g. 412 Oak St"
+              style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => setPunchModal(null)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 18px", color: C.muted, fontSize: 14, cursor: "pointer" }}>Cancel</button>
+            <button onClick={adminClockIn} disabled={!adminPunchProp && !adminPunchManual.trim()}
+              style={{ flex: 1, background: (!adminPunchProp && !adminPunchManual.trim()) ? C.surface : C.green, border: "none", borderRadius: 8, padding: "10px", color: (!adminPunchProp && !adminPunchManual.trim()) ? C.muted : "#fff", fontSize: 14, fontWeight: 700, cursor: (!adminPunchProp && !adminPunchManual.trim()) ? "not-allowed" : "pointer" }}>
+              Clock In
+            </button>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 }
