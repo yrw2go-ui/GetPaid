@@ -50,6 +50,8 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
   const [tab, setTab] = useState<"workers"|"approvals">("approvals");
   const [copiedToken, setCopiedToken] = useState("");
   const [approvalRates, setApprovalRates] = useState<Record<string, string>>({});
+  const [editingSub, setEditingSub] = useState<string | null>(null);
+  const [subEdits, setSubEdits] = useState<Record<string, { hours: string; date: string; note: string }>>({});
   const [activePunches, setActivePunches] = useState<{ id: string; worker_id: string; clock_in: string; property_id: string | null; manual_location: string }[]>([]);
   const [punchModal, setPunchModal] = useState<Worker | null>(null);
   const [adminPunchProp, setAdminPunchProp] = useState("");
@@ -149,6 +151,18 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
       setCopiedToken(token);
       setTimeout(() => setCopiedToken(""), 4000);
     }
+  };
+
+  const saveSubEdit = async (subId: string) => {
+    const e = subEdits[subId];
+    if (!e) return;
+    const h = parseFloat(e.hours);
+    if (!h || h <= 0) { alert("Enter valid hours."); return; }
+    await supabase.from("hour_submissions").update({
+      hours: h, date: e.date, note: e.note,
+    }).eq("id", subId);
+    setSubmissions(prev => prev.map(s => s.id === subId ? { ...s, hours: h, date: e.date, note: e.note } : s));
+    setEditingSub(null);
   };
 
   const approveSubmission = async (sub: Submission) => {
@@ -264,16 +278,54 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
           {submissions.map(s => (
             <div key={s.id} style={{ background: C.card, border: `1px solid ${C.yellow}44`, borderRadius: 12, padding: "16px 18px", marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{getWorkerName(s.worker_id)}</div>
-                  <div style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{s.date} · {getProperty(s.property_id, s.manual_location)}</div>
-                  {s.note && <div style={{ color: C.sub, fontSize: 12, fontStyle: "italic", marginTop: 3 }}>{s.note}</div>}
+                  <div style={{ color: C.muted, fontSize: 13, marginTop: 3 }}>{getProperty(s.property_id, s.manual_location)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{hrs(Number(s.hours))}</div>
                   <div style={{ color: C.yellow, fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>Pending</div>
                 </div>
               </div>
+
+              {editingSub === s.id ? (
+                <div style={{ background: C.surface, border: `1px solid ${C.accent}44`, borderRadius: 10, padding: "14px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 90 }}>
+                      <label style={{ display: "block", color: C.sub, fontSize: 10, fontWeight: 700, marginBottom: 4, letterSpacing: 0.8, textTransform: "uppercase" as const }}>Hours</label>
+                      <input type="number" step="0.25" value={subEdits[s.id]?.hours ?? String(s.hours)}
+                        onChange={e => setSubEdits(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || { hours: String(s.hours), date: s.date, note: s.note || "" }), hours: e.target.value } }))}
+                        style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
+                    </div>
+                    <div style={{ flex: 1.4, minWidth: 130 }}>
+                      <label style={{ display: "block", color: C.sub, fontSize: 10, fontWeight: 700, marginBottom: 4, letterSpacing: 0.8, textTransform: "uppercase" as const }}>Date</label>
+                      <input type="date" value={subEdits[s.id]?.date ?? s.date}
+                        onChange={e => setSubEdits(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || { hours: String(s.hours), date: s.date, note: s.note || "" }), date: e.target.value } }))}
+                        style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const }} />
+                    </div>
+                  </div>
+                  <label style={{ display: "block", color: C.sub, fontSize: 10, fontWeight: 700, marginBottom: 4, letterSpacing: 0.8, textTransform: "uppercase" as const }}>Note</label>
+                  <input value={subEdits[s.id]?.note ?? (s.note || "")}
+                    onChange={e => setSubEdits(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || { hours: String(s.hours), date: s.date, note: s.note || "" }), note: e.target.value } }))}
+                    placeholder="Optional note"
+                    style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box" as const, marginBottom: 12 }} />
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={() => setEditingSub(null)}
+                      style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", color: C.muted, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => saveSubEdit(s.id)}
+                      style={{ background: C.accent, border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div style={{ color: C.muted, fontSize: 13 }}>{s.date}</div>
+                  {s.note && <div style={{ color: C.sub, fontSize: 12, fontStyle: "italic" }}>&ldquo;{s.note}&rdquo;</div>}
+                  <button onClick={() => { setEditingSub(s.id); setSubEdits(prev => ({ ...prev, [s.id]: { hours: String(s.hours), date: s.date, note: s.note || "" } })); }}
+                    style={{ marginLeft: "auto", background: C.accentGlow, border: `1px solid ${C.accent}44`, borderRadius: 8, padding: "6px 12px", color: C.accentLight, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ display: "block", color: C.sub, fontSize: 11, fontWeight: 700, marginBottom: 5, letterSpacing: 0.8, textTransform: "uppercase" }}>Pay Rate for This Job ($/hr)</label>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
