@@ -132,6 +132,7 @@ export default function WorkerPortal() {
   const [punchManual, setPunchManual] = useState("");
   const [punchNote, setPunchNote] = useState("");
   const [nowTick, setNowTick] = useState(Date.now());
+  const [debugMsg, setDebugMsg] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -242,6 +243,7 @@ export default function WorkerPortal() {
     setProperties(props || []);
     setSubmissions(subs || []);
     setActivePunch(punch && punch.length ? punch[0] : null);
+    setDebugMsg(`acct_owner=${acc?.user_id || "NULL"} | props_returned=${(props || []).length}`);
     setLoading(false);
   };
 
@@ -318,9 +320,10 @@ export default function WorkerPortal() {
         {tab === "clock" && (
           <div>
             <h1 style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,margin:"0 0 4px"}}>Clock In / Out</h1>
-            <p style={{color:C.muted,margin:"0 0 20px",fontSize:13}}>
+            <p style={{color:C.muted,margin:"0 0 8px",fontSize:13}}>
               {activePunch ? "You&apos;re on the clock" : "Pick a job, then clock in"}
             </p>
+            {debugMsg && <div style={{ background:"#1a1a24", border:"1px solid #2a2a3a", borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:11, color:"#f59e0b", fontFamily:"monospace" }}>DEBUG: {debugMsg}</div>}
 
             {activePunch ? (
               <div style={{ background:`linear-gradient(135deg, ${C.green}22, rgba(16,185,129,0.08))`, border:`1px solid ${C.green}55`, borderRadius:16, padding:"28px 22px", textAlign:"center" }}>
