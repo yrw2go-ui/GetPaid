@@ -228,6 +228,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
     ];
 
     const { data } = await supabase.from("invoices").insert({
+      user_id: userId,
       property_id: property.id,
       invoice_number: invNum,
       date: today(),
@@ -271,7 +272,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
           excluded_from_invoice: isPMFee(item.description || ""),
           sort_order: (items.length + idx),
         }));
-        const { data, error } = await supabase.from("scope_items").insert(rows).select();
+        const { data, error } = await supabase.from("scope_items").insert(rows.map((r: Record<string, unknown>) => ({ ...r, user_id: userId }))).select();
         if (error) throw new Error("Save failed: " + error.message);
         if (data) setItems(prev => [...prev, ...data]);
       }
@@ -285,6 +286,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
     if (!newItem.description) return;
     const pmFee = isPMFee(newItem.description);
     const { data } = await supabase.from("scope_items").insert({
+      user_id: userId,
       property_id: property.id, description: newItem.description,
       cost: parseFloat(newItem.cost) || 0, labor: parseFloat(newItem.labor) || 0,
       completed: false, excluded_from_invoice: pmFee,
@@ -326,6 +328,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
   const addMileage = async () => {
     if (!mileageForm.miles) return;
     const { data } = await supabase.from("mileage_logs").insert({
+      user_id: userId,
       property_id: property.id, date: mileageForm.date,
       miles: parseFloat(mileageForm.miles), note: mileageForm.note,
     }).select().single();
@@ -557,7 +560,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
 }
 
 // ── Main Scope Tab ─────────────────────────────────────────────────────────────
-export default function ScopeTab({ properties, logs, contractors, expenses, advances, onPropertyUpdate }: {
+export default function ScopeTab({ properties, logs, contractors, expenses, advances, userId, onPropertyUpdate }: {
   properties: Property[]; logs: Log[]; contractors: Contractor[];
   expenses: Expense[]; advances: Advance[];
   onPropertyUpdate: (p: Property) => void;
