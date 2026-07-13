@@ -229,8 +229,13 @@ export default function WorkerPortal() {
     const { data: w } = await supabase.from("workers").select("*").eq("user_id", user.id).single();
     if (!w) { setLoading(false); return; }
     setWorker(w);
+    // Properties are keyed to the owner's user_id, not account_id
+    const { data: acc } = await supabase.from("accounts").select("user_id").eq("id", w.account_id).single();
+
     const [{ data: props }, { data: subs }, { data: punch }] = await Promise.all([
-      supabase.from("properties").select("id,address,city").eq("account_id", w.account_id),
+      acc?.user_id
+        ? supabase.from("properties").select("id,address,city").eq("user_id", acc.user_id)
+        : Promise.resolve({ data: [] as Property[] }),
       supabase.from("hour_submissions").select("*").eq("worker_id", w.id).order("date", { ascending: false }),
       supabase.from("time_punches").select("*").eq("worker_id", w.id).is("clock_out", null).order("clock_in", { ascending: false }).limit(1),
     ]);
