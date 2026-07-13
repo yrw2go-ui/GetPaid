@@ -20,7 +20,7 @@ const hrs = (h: number) => `${Number(h).toFixed(1)}h`;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const weekStart = () => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 
-interface Worker { id: string; name: string; email: string; rate: number; account_id: string; }
+interface Worker { id: string; name: string; email: string; rate: number; account_id: string; contractor_id?: string; }
 interface Property { id: string; address: string; city: string; }
 interface Submission { id: string; hours: number; date: string; note: string; status: string; property_id: string; rate_override: number | null; }
 
@@ -123,10 +123,15 @@ export default function WorkerPortal() {
   const [worker, setWorker] = useState<Worker | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [tab, setTab] = useState("hours");
+  const [tab, setTab] = useState("clock");
   const [showLog, setShowLog] = useState(false);
   const [logForm, setLogForm] = useState({ propertyId: "", hours: "", date: today(), note: "" });
   const [loading, setLoading] = useState(true);
+  const [activePunch, setActivePunch] = useState<{ id: string; clock_in: string; property_id: string | null; manual_location: string } | null>(null);
+  const [punchProp, setPunchProp] = useState("");
+  const [punchManual, setPunchManual] = useState("");
+  const [punchNote, setPunchNote] = useState("");
+  const [nowTick, setNowTick] = useState(Date.now());
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -165,18 +170,73 @@ export default function WorkerPortal() {
     loadData();
   };
 
+  // Live timer tick
+  useEffect(() => {
+    if (!activePunch) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [activePunch]);
+
+  const elapsed = () => {
+    if (!activePunch) return "0:00:00";
+    const secs = Math.max(0, Math.floor((nowTick - new Date(activePunch.clock_in).getTime()) / 1000));
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+    return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  };
+
+  const clockIn = async () => {
+    if (!worker) return;
+    if (!punchProp && !punchManual.trim()) { alert("Pick a job or type a location."); return; }
+    const { data, error } = await supabase.from("time_punches").insert({
+      account_id: worker.account_id, worker_id: worker.id,
+      contractor_id: worker.contractor_id || null,
+      property_id: punchProp || null,
+      manual_location: punchProp ? "" : punchManual.trim(),
+      clock_in: new Date().toISOString(), submitted: false,
+    }).select().single();
+    if (error) { alert("Error: " + error.message); return; }
+    if (data) setActivePunch(data);
+  };
+
+  const clockOut = async () => {
+    if (!activePunch || !worker) return;
+    const out = new Date();
+    const inTime = new Date(activePunch.clock_in);
+    const hours = Math.round(((out.getTime() - inTime.getTime()) / 3600000) * 100) / 100;
+    if (hours <= 0) { alert("Shift too short to record."); return; }
+
+    await supabase.from("time_punches").update({
+      clock_out: out.toISOString(), note: punchNote, submitted: true,
+    }).eq("id", activePunch.id);
+
+    const d = inTime;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+    await supabase.from("hour_submissions").insert({
+      account_id: worker.account_id, worker_id: worker.id,
+      property_id: activePunch.property_id,
+      manual_location: activePunch.manual_location || "",
+      hours, date: dateStr, note: punchNote || "Clocked shift", status: "pending",
+    });
+
+    setActivePunch(null); setPunchNote(""); setPunchProp(""); setPunchManual("");
+    loadData();
+  };
+
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     const { data: w } = await supabase.from("workers").select("*").eq("user_id", user.id).single();
     if (!w) { setLoading(false); return; }
     setWorker(w);
-    const [{ data: props }, { data: subs }] = await Promise.all([
+    const [{ data: props }, { data: subs }, { data: punch }] = await Promise.all([
       supabase.from("properties").select("id,address,city").eq("account_id", w.account_id),
       supabase.from("hour_submissions").select("*").eq("worker_id", w.id).order("date", { ascending: false }),
+      supabase.from("time_punches").select("*").eq("worker_id", w.id).is("clock_out", null).order("clock_in", { ascending: false }).limit(1),
     ]);
     setProperties(props || []);
     setSubmissions(subs || []);
+    setActivePunch(punch && punch.length ? punch[0] : null);
     setLoading(false);
   };
 
@@ -240,7 +300,7 @@ export default function WorkerPortal() {
           <button onClick={signOut} style={{background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer"}}>Sign Out</button>
         </div>
         <div style={{ display:"flex",gap:4,paddingBottom:8,overflowX:"auto",scrollbarWidth:"none" as const }}>
-          {[{id:"hours",label:"My Hours"},{id:"earnings",label:"Earnings"},{id:"paystub",label:"Pay Stub"}].map(t => (
+          {[{id:"clock",label:"Clock In/Out"},{id:"hours",label:"My Hours"},{id:"earnings",label:"Earnings"},{id:"paystub",label:"Pay Stub"}].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{ background:tab===t.id?C.accentGlow:"transparent",border:tab===t.id?`1px solid ${C.accent}44`:"1px solid transparent",borderRadius:8,padding:"6px 14px",color:tab===t.id?C.accentLight:C.muted,fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0 }}>
               {t.label}
@@ -250,6 +310,55 @@ export default function WorkerPortal() {
       </div>
 
       <div style={{ maxWidth:600,margin:"0 auto",padding:"24px 20px" }}>
+        {tab === "clock" && (
+          <div>
+            <h1 style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,margin:"0 0 4px"}}>Clock In / Out</h1>
+            <p style={{color:C.muted,margin:"0 0 20px",fontSize:13}}>
+              {activePunch ? "You&apos;re on the clock" : "Pick a job, then clock in"}
+            </p>
+
+            {activePunch ? (
+              <div style={{ background:`linear-gradient(135deg, ${C.green}22, rgba(16,185,129,0.08))`, border:`1px solid ${C.green}55`, borderRadius:16, padding:"28px 22px", textAlign:"center" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.green, textTransform:"uppercase", letterSpacing:1 }}>On the clock</div>
+                <div style={{ fontSize:44, fontWeight:800, letterSpacing:-1, margin:"10px 0", fontVariantNumeric:"tabular-nums" as const }}>{elapsed()}</div>
+                <div style={{ color:C.muted, fontSize:13, marginBottom:20 }}>
+                  📍 {activePunch.property_id
+                    ? (properties.find(p => p.id === activePunch.property_id)?.address || "Job")
+                    : activePunch.manual_location}
+                </div>
+                <input value={punchNote} onChange={e => setPunchNote(e.target.value)} placeholder="What did you work on? (optional)"
+                  style={{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.text, fontSize:14, outline:"none", boxSizing:"border-box" as const, marginBottom:14 }} />
+                <button onClick={clockOut}
+                  style={{ width:"100%", background:C.red, border:"none", borderRadius:12, padding:"16px", color:"#fff", fontSize:16, fontWeight:800, cursor:"pointer" }}>
+                  Clock Out
+                </button>
+                <div style={{ fontSize:11, color:C.muted, marginTop:12 }}>Your hours will be sent for approval.</div>
+              </div>
+            ) : (
+              <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"22px" }}>
+                <label style={{ display:"block", color:C.sub, fontSize:11, fontWeight:700, marginBottom:6, letterSpacing:0.8, textTransform:"uppercase" as const }}>Pick a Job</label>
+                <select value={punchProp} onChange={e => { setPunchProp(e.target.value); if (e.target.value) setPunchManual(""); }}
+                  style={{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.text, fontSize:14, outline:"none", marginBottom:16 }}>
+                  <option value="">Select a job...</option>
+                  {properties.map(p => <option key={p.id} value={p.id}>{p.address}</option>)}
+                </select>
+
+                <div style={{ textAlign:"center", color:C.muted, fontSize:12, marginBottom:16 }}>— or —</div>
+
+                <label style={{ display:"block", color:C.sub, fontSize:11, fontWeight:700, marginBottom:6, letterSpacing:0.8, textTransform:"uppercase" as const }}>Type a Location</label>
+                <input value={punchManual} onChange={e => { setPunchManual(e.target.value); if (e.target.value) setPunchProp(""); }}
+                  placeholder="e.g. 412 Oak St"
+                  style={{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.text, fontSize:14, outline:"none", boxSizing:"border-box" as const, marginBottom:20 }} />
+
+                <button onClick={clockIn} disabled={!punchProp && !punchManual.trim()}
+                  style={{ width:"100%", background:(!punchProp && !punchManual.trim()) ? C.surface : C.green, border:"none", borderRadius:12, padding:"16px", color:(!punchProp && !punchManual.trim()) ? C.muted : "#fff", fontSize:16, fontWeight:800, cursor:(!punchProp && !punchManual.trim()) ? "not-allowed" : "pointer" }}>
+                  Clock In
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "hours" && (
           <div>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
