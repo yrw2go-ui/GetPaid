@@ -142,6 +142,7 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     }).select().single();
     if (data) {
       setInvites(prev => [data, ...prev]);
+      emailInviteLink(token, inviteEmail);
       setInviteEmail("");
       setInviteContractorId("");
       setShowInvite(false);
@@ -204,6 +205,15 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
     setTimeout(() => setCopiedToken(""), 3000);
   };
 
+  const emailInviteLink = (token: string, toEmail: string) => {
+    const link = `${window.location.origin}/worker?invite=${token}`;
+    const subject = encodeURIComponent("You're invited to the GetPaid worker portal");
+    const body = encodeURIComponent(
+      `Hi,\n\nYou've been invited to join the worker portal. Use the link below to sign up, clock in/out, and track your hours.\n\n${link}\n\nYour invite code: ${token}\n\nThanks!`
+    );
+    window.location.href = `mailto:${encodeURIComponent(toEmail)}?subject=${subject}&body=${body}`;
+  };
+
   const getProperty = (id: string, manual?: string) => properties.find(p => p.id === id)?.address || manual || "Unknown";
   const getWorkerName = (id: string) => workers.find(w => w.id === id)?.name || "Unknown";
 
@@ -252,7 +262,7 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
 
       {copiedToken && (
         <div style={{ background: C.greenGlow, border: `1px solid ${C.green}44`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C.green }}>
-          ✓ Invite link copied to clipboard! Share it with your worker.
+          ✓ Invite link copied. Paste it anywhere, or tap ✉️ Email to send it.
         </div>
       )}
 
@@ -397,10 +407,16 @@ export default function WorkersTab({ userId, properties, contractors }: { userId
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{inv.email}</div>
                     <div style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>Code: {inv.token}</div>
                   </div>
-                  <button onClick={() => copyInviteLink(inv.token)}
-                    style={{ background: copiedToken === inv.token ? C.greenGlow : C.accentGlow, border: `1px solid ${copiedToken === inv.token ? C.green : C.accent}44`, borderRadius: 8, padding: "6px 12px", color: copiedToken === inv.token ? C.green : C.accentLight, fontSize: 12, cursor: "pointer" }}>
-                    {copiedToken === inv.token ? "✓ Copied" : "Copy Link"}
-                  </button>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button onClick={() => emailInviteLink(inv.token, inv.email)}
+                      style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 12px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      ✉️ Email
+                    </button>
+                    <button onClick={() => copyInviteLink(inv.token)}
+                      style={{ background: copiedToken === inv.token ? C.greenGlow : C.surface, border: `1px solid ${copiedToken === inv.token ? C.green : C.border}44`, borderRadius: 8, padding: "6px 12px", color: copiedToken === inv.token ? C.green : C.muted, fontSize: 12, cursor: "pointer" }}>
+                      {copiedToken === inv.token ? "✓ Copied" : "Copy"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
