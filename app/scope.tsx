@@ -562,7 +562,7 @@ function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, a
 // ── Main Scope Tab ─────────────────────────────────────────────────────────────
 export default function ScopeTab({ properties, logs, contractors, expenses, advances, userId, onPropertyUpdate }: {
   properties: Property[]; logs: Log[]; contractors: Contractor[];
-  expenses: Expense[]; advances: Advance[];
+  expenses: Expense[]; advances: Advance[]; userId: string;
   onPropertyUpdate: (p: Property) => void;
 }) {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
