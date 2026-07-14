@@ -152,10 +152,10 @@ function PropertyPL({ property, scopeItems, logs, contractors, expenses, advance
 }
 
 // ── Scope Detail View ─────────────────────────────────────────────────────────
-function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, advances, allMileageLogs, onPropertyUpdate }: {
+function ScopeDetail({ property, onBack, onClose, logs, contractors, expenses, advances, allMileageLogs, userId, onPropertyUpdate }: {
   property: Property; onBack: () => void; onClose?: () => void;
   logs: Log[]; contractors: Contractor[]; expenses: Expense[]; advances: Advance[];
-  allMileageLogs: MileageLog[]; onPropertyUpdate: (p: Property) => void;
+  allMileageLogs: MileageLog[]; userId: string; onPropertyUpdate: (p: Property) => void;
 }) {
   const [items, setItems] = useState<ScopeItem[]>([]);
   const [mileageLogs, setMileageLogs] = useState<MileageLog[]>([]);
@@ -583,7 +583,7 @@ export default function ScopeTab({ properties, logs, contractors, expenses, adva
     <ScopeDetail
       property={selectedProperty} onBack={() => setSelectedProperty(null)}
       logs={logs} contractors={contractors} expenses={expenses} advances={advances}
-      allMileageLogs={allMileageLogs} onPropertyUpdate={(p) => { onPropertyUpdate(p); setSelectedProperty(p); }}
+      allMileageLogs={allMileageLogs} userId={userId} onPropertyUpdate={(p) => { onPropertyUpdate(p); setSelectedProperty(p); }}
     />
   );
 
