@@ -167,7 +167,7 @@ function ReceiptScanModal({ properties, onComplete, onClose }: {
               <div style={{ fontSize: 44, marginBottom: 12 }}>📷</div>
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Upload Receipt Photo</div>
               <div style={{ color: C.muted, fontSize: 13 }}>JPG, PNG, or PDF &middot; tap to choose or take photo</div>
-              <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
             </div>
           ) : (
             <div style={{ marginBottom: 20 }}>
